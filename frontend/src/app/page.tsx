@@ -343,7 +343,7 @@ export default function Home() {
                 padding: '20px',
                 color: '#666'
             }}>
-                <p>🔮 Magic Spell: <code style={{ color: '#8b5cf6' }}>0xf2dbdeb981aca16eb5cb33eab7</code></p>
+                <p>🔮 Hidden Easter Egg: Find the Magic Spell in the <code style={{ color: '#8b5cf6' }}>reputation.move</code> contract!</p>
                 <p style={{ fontSize: '0.8rem' }}>
                     Contract: <a
                         href={`https://explorer.aptoslabs.com/account/${MODULE_ADDRESS}?network=testnet`}

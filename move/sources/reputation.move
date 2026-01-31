@@ -69,6 +69,6 @@ module sentience::reputation {
     /// Magic spell for Easter Egg (Level 4)
     #[view]
     public fun get_magic_spell(): vector<u8> {
-        x"f2dbdeb981aca16eb5cb33eab7"
+        x"a1b2c3d4e5f6789012345678abcd"
     }
 }

@@ -102,7 +102,7 @@ Collect 5 shards to assemble the **Genesis Prime NFT**:
 | 1 | The Observer | Basic x402 payment |
 | 2 | The Sybil | Trust score > 10 |
 | 3 | The Ghost | Soulbound identity |
-| 4 | The Mirror | Magic Spell: `0xf2dbdeb981aca16eb5cb33eab7` |
+| 4 | The Mirror | Find the hidden spell in `reputation.move` |
 | 5 | The Void | High-value transaction |
 
 ---
