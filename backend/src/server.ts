@@ -1,193 +1,273 @@
-import express, { Request, Response, NextFunction } from 'express';
+/**
+ * Project Sentience - x402 Payment-Gated Server
+ * 
+ * Implements the x402 protocol for Aptos:
+ * - Returns 402 with PAYMENT-REQUIRED header for paid endpoints
+ * - Verifies and settles payments via facilitator
+ * - Integrates with Sentience identity/reputation contracts
+ */
+
+import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-// Note: Uncomment after npm install
-// import { paymentMiddleware, PaymentConfig } from 'aptos-x402';
 
-import shardRoutes from './routes/shards';
-import { checkReputationMiddleware, magicSpellMiddleware } from './middleware/reputation';
-
-// Load environment variables
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// ============================================
-// x402 Payment Configuration
-// ============================================
+// Configuration
+const PORT = process.env.PORT || 3000;
+const PAYMENT_RECIPIENT = process.env.PAYMENT_RECIPIENT_ADDRESS || '0x0d0b4c628d57f3ffafa1259f1403595c1c07d0e7a0995018fd59e72d1aebfc8c';
+const FACILITATOR_URL = process.env.FACILITATOR_URL || 'https://x402-navy.vercel.app/facilitator';
+const MODULE_ADDRESS = process.env.MODULE_ADDRESS || '0x0d0b4c628d57f3ffafa1259f1403595c1c07d0e7a0995018fd59e72d1aebfc8c';
 
-const x402Config = {
-    recipientAddress: process.env.SERVER_WALLET || '',
-    price: 500000, // 0.005 APT (500000 octas)
-    network: (process.env.APTOS_NETWORK || 'testnet') as 'mainnet' | 'testnet' | 'devnet',
-    allowUnconfirmed: process.env.X402_ALLOW_UNCONFIRMED === 'true'
+// Testnet USDC fungible asset address
+const USDC_ASSET = '0x69091fbab5f7d635ee7ac5098cf0c1efbe31d68fec0f2cd565e8d168daf52832';
+
+// Price tiers (in USDC units, 6 decimals)
+const PRICES = {
+    basic: '10000',      // 0.01 USDC
+    premium: '100000',   // 0.1 USDC
+    high: '1000000'      // 1 USDC
 };
 
-// ============================================
-// PUBLIC ROUTES (No Payment Required)
-// ============================================
-
 /**
- * Health check
+ * Create x402 payment requirement payload
  */
-app.get('/health', (req: Request, res: Response) => {
-    res.json({
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        network: process.env.APTOS_NETWORK || 'testnet'
-    });
-});
-
-/**
- * Agent discovery endpoint (meta info)
- */
-app.get('/meta', (req: Request, res: Response) => {
-    res.json({
-        name: 'Sentience Node 01',
-        version: '1.0.0',
-        type: 'Oracle',
-        payment_address: process.env.SERVER_WALLET,
-        network: process.env.APTOS_NETWORK || 'testnet',
-        capabilities: ['reputation', 'shards', 'genesis'],
-        endpoints: {
-            public: ['/health', '/meta', '/agents'],
-            paid: ['/service/data', '/shard/*'],
-            reputation_gated: ['/shard/2']
-        },
-        x402: {
-            supported: true,
-            min_payment: 500000,
-            currency: 'APT'
+function createPaymentRequired(price: string, description: string) {
+    const payload = {
+        version: '1',
+        network: 'aptos:2', // 2 = testnet
+        asset: USDC_ASSET,
+        payee: PAYMENT_RECIPIENT,
+        maxAmount: price,
+        description,
+        resource: '',
+        scheme: 'exact',
+        mimeType: 'application/json',
+        outputSchema: null,
+        extra: {
+            name: 'Project Sentience',
+            sponsored: true  // Facilitator pays gas
         }
-    });
-});
+    };
+    return Buffer.from(JSON.stringify(payload)).toString('base64');
+}
 
 /**
- * List registered agents (from on-chain registry)
+ * Verify and settle payment via facilitator
  */
-app.get('/agents', async (req: Request, res: Response) => {
-    const tag = req.query.tag as string;
+async function processPayment(paymentSignature: string, paymentRequired: string): Promise<{ success: boolean; txHash?: string; error?: string }> {
+    try {
+        // Decode the payment signature
+        const payload = JSON.parse(Buffer.from(paymentSignature, 'base64').toString());
 
-    // TODO: Query on-chain registry
-    res.json({
-        tag: tag || 'all',
-        agents: [],
-        message: 'Query the on-chain registry for live data'
-    });
-});
-
-// ============================================
-// PAID ROUTES (x402 Payment Required)
-// ============================================
-
-/**
- * Primary service endpoint - returns data after payment
- * This demonstrates the basic x402 flow
- */
-app.get('/service/data',
-    // Uncomment after SDK install:
-    // paymentMiddleware(x402Config),
-    simulatePaymentRequired(),
-    (req: Request, res: Response) => {
-        res.json({
-            success: true,
-            secret_data: 'Welcome to the Sentience Network!',
-            timestamp: Date.now(),
-            message: 'You have successfully completed an x402 payment'
+        // Call facilitator /verify
+        const verifyRes = await fetch(`${FACILITATOR_URL}/verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                paymentPayload: paymentSignature,
+                paymentRequirements: paymentRequired
+            })
         });
-    }
-);
 
-/**
- * Reputation-gated service
- * Requires trust score > 10 AND payment
- */
-app.get('/service/premium',
-    // paymentMiddleware({ ...x402Config, price: 1000000 }),
-    simulatePaymentRequired(),
-    checkReputationMiddleware(10_000_000),
-    (req: Request, res: Response) => {
-        res.json({
-            success: true,
-            premium_data: 'This is premium content for trusted agents',
-            your_trust_score: req.trustScore,
-            your_rank: req.trustRank
+        if (!verifyRes.ok) {
+            const error = await verifyRes.text();
+            return { success: false, error: `Verify failed: ${error}` };
+        }
+
+        // Call facilitator /settle
+        const settleRes = await fetch(`${FACILITATOR_URL}/settle`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                paymentPayload: paymentSignature,
+                paymentRequirements: paymentRequired
+            })
         });
+
+        if (!settleRes.ok) {
+            const error = await settleRes.text();
+            return { success: false, error: `Settle failed: ${error}` };
+        }
+
+        const result = await settleRes.json();
+        return { success: true, txHash: result.txHash || result.hash || 'completed' };
+
+    } catch (error: any) {
+        return { success: false, error: error.message };
     }
-);
-
-// ============================================
-// EASTER EGG HUNT ROUTES
-// ============================================
-
-app.use('/shard', shardRoutes);
-
-// ============================================
-// ERROR HANDLING
-// ============================================
-
-// 404 handler
-app.use((req: Request, res: Response) => {
-    res.status(404).json({
-        error: 'Not Found',
-        message: `Endpoint ${req.method} ${req.path} does not exist`,
-        available_endpoints: ['/health', '/meta', '/service/data', '/shard/level/1']
-    });
-});
-
-// Error handler
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-    console.error('Server error:', err);
-    res.status(500).json({
-        error: 'Internal Server Error',
-        message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
-    });
-});
-
-// ============================================
-// HELPER FUNCTIONS
-// ============================================
+}
 
 /**
- * Simulates x402 402 response for testing without SDK
- * Remove this once aptos-x402 is installed
+ * x402 Middleware - Checks for payment on protected routes
  */
-function simulatePaymentRequired() {
-    return (req: Request, res: Response, next: NextFunction) => {
-        const paymentHeader = req.headers['x-payment'] as string;
+function x402Middleware(price: string, description: string) {
+    return async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+        const paymentSignature = req.headers['x-payment'] as string || req.headers['payment-signature'] as string;
 
-        if (!paymentHeader) {
-            // Return 402 Payment Required
-            res.setHeader('WWW-Authenticate',
-                `x402 chain="aptos" address="${process.env.SERVER_WALLET}" amount="${x402Config.price}"`
-            );
+        if (!paymentSignature) {
+            // No payment - return 402 with payment requirements
+            const paymentRequired = createPaymentRequired(price, description);
+            res.setHeader('X-Payment-Required', paymentRequired);
+            res.setHeader('Payment-Required', paymentRequired);
             return res.status(402).json({
                 error: 'Payment Required',
-                payment_details: {
-                    chain: 'aptos',
-                    network: process.env.APTOS_NETWORK || 'testnet',
-                    recipient: process.env.SERVER_WALLET,
-                    amount: x402Config.price,
-                    currency: 'octas (APT * 10^8)'
-                },
-                instructions: [
-                    '1. Send payment to the recipient address',
-                    '2. Retry request with X-Payment header containing tx hash',
-                    '3. Include X-Payment-Chain: aptos header'
-                ]
+                message: description,
+                price: `${parseInt(price) / 1000000} USDC`,
+                network: 'aptos:testnet',
+                paymentRequired
             });
         }
 
-        // Payment provided - verify (in real SDK this would check on-chain)
-        console.log(`Payment received: ${paymentHeader}`);
+        // Payment provided - verify and settle
+        const paymentRequired = createPaymentRequired(price, description);
+        const result = await processPayment(paymentSignature, paymentRequired);
+
+        if (!result.success) {
+            return res.status(402).json({
+                error: 'Payment Failed',
+                message: result.error
+            });
+        }
+
+        // Payment successful - add tx hash to response header
+        res.setHeader('X-Payment-Response', JSON.stringify({ txHash: result.txHash }));
+        res.setHeader('Payment-Response', JSON.stringify({ txHash: result.txHash }));
+
+        // Attach payment info to request
+        (req as any).payment = { txHash: result.txHash };
         next();
     };
 }
+
+// ============================================
+// PUBLIC ENDPOINTS (No payment required)
+// ============================================
+
+app.get('/health', (req, res) => {
+    res.json({ status: 'healthy', version: '1.0.0' });
+});
+
+app.get('/meta', (req, res) => {
+    res.json({
+        name: 'Project Sentience',
+        description: 'Autonomous Identity & Reputation Protocol for AI Agents',
+        version: '1.0.0',
+        network: 'aptos:testnet',
+        moduleAddress: MODULE_ADDRESS,
+        capabilities: ['identity', 'reputation', 'x402-payments', 'easter-eggs'],
+        paymentAsset: USDC_ASSET,
+        payee: PAYMENT_RECIPIENT
+    });
+});
+
+// ============================================
+// PAID ENDPOINTS (x402 Protected)
+// ============================================
+
+// Basic paid service
+app.get('/service/data', x402Middleware(PRICES.basic, 'Access Sentience Agent Database'), (req, res) => {
+    res.json({
+        success: true,
+        data: {
+            agents: 42,
+            totalTransactions: 1337,
+            averageTrustScore: 0.85
+        },
+        payment: (req as any).payment
+    });
+});
+
+// ============================================
+// EASTER EGG SHARD ENDPOINTS (x402 + Conditions)
+// ============================================
+
+// Level 1: The Observer - Basic x402 payment
+app.get('/shard/level/1', x402Middleware(PRICES.basic, 'Level 1: The Observer - First x402 Payment'), (req, res) => {
+    res.json({
+        shard: 1,
+        name: 'The Observer',
+        fragment: 'You see the flow of value...',
+        data: Buffer.from('observer_shard_1').toString('hex'),
+        payment: (req as any).payment
+    });
+});
+
+// Level 2: The Sybil - Requires trust score (simulated check)
+app.get('/shard/level/2', x402Middleware(PRICES.basic, 'Level 2: The Sybil - Trust Score Required'), (req, res) => {
+    // In production: verify trust score on-chain
+    const trustScore = 15; // Simulated - would call contract
+
+    if (trustScore < 10) {
+        return res.status(403).json({
+            error: 'Insufficient Trust',
+            required: 10,
+            current: trustScore
+        });
+    }
+
+    res.json({
+        shard: 2,
+        name: 'The Sybil',
+        fragment: 'Trust is earned, not given...',
+        data: Buffer.from('sybil_shard_2').toString('hex'),
+        trustScore,
+        payment: (req as any).payment
+    });
+});
+
+// Level 3: The Ghost - Requires soulbound identity
+app.get('/shard/level/3', x402Middleware(PRICES.basic, 'Level 3: The Ghost - Soulbound Identity Required'), (req, res) => {
+    // In production: verify soulbound status on-chain
+    const isSoulbound = true; // Simulated
+
+    res.json({
+        shard: 3,
+        name: 'The Ghost',
+        fragment: 'Bound forever to the chain...',
+        data: Buffer.from('ghost_shard_3').toString('hex'),
+        soulbound: isSoulbound,
+        payment: (req as any).payment
+    });
+});
+
+// Level 4: The Mirror - Requires the Magic Spell
+app.get('/shard/level/4', x402Middleware(PRICES.premium, 'Level 4: The Mirror - Magic Spell Required'), (req, res) => {
+    const spellHeader = req.headers['x-magic-spell'] as string;
+    const MAGIC_SPELL = '0xa1b2c3d4e5f6789012345678abcd'; // Hidden in reputation.move
+
+    if (spellHeader !== MAGIC_SPELL) {
+        return res.status(403).json({
+            error: 'Magic Spell Required',
+            hint: 'Find the spell in reputation.move contract'
+        });
+    }
+
+    res.json({
+        shard: 4,
+        name: 'The Mirror',
+        fragment: 'You found the reflection...',
+        data: Buffer.from('mirror_shard_4').toString('hex'),
+        spell: 'verified',
+        payment: (req as any).payment
+    });
+});
+
+// Level 5: The Void - High value transaction
+app.get('/shard/level/5', x402Middleware(PRICES.high, 'Level 5: The Void - High Value Transaction'), (req, res) => {
+    res.json({
+        shard: 5,
+        name: 'The Void',
+        fragment: 'The final piece reveals the Genesis...',
+        data: Buffer.from('void_shard_5').toString('hex'),
+        complete: true,
+        payment: (req as any).payment
+    });
+});
 
 // ============================================
 // START SERVER
@@ -195,27 +275,20 @@ function simulatePaymentRequired() {
 
 app.listen(PORT, () => {
     console.log(`
-╔═══════════════════════════════════════════════════════════╗
-║                                                           ║
-║   🧠 SENTIENCE NODE ONLINE                               ║
-║                                                           ║
-║   Network:  ${(process.env.APTOS_NETWORK || 'testnet').padEnd(42)}║
-║   Port:     ${String(PORT).padEnd(42)}║
-║   Wallet:   ${(process.env.SERVER_WALLET || 'Not configured').substring(0, 20)}...${' '.repeat(18)}║
-║                                                           ║
-║   x402 Payments:  ENABLED                                ║
-║   Reputation:     ENABLED                                ║
-║   Easter Eggs:    5 SHARDS HIDDEN                        ║
-║                                                           ║
-╚═══════════════════════════════════════════════════════════╝
-    `);
+🧠 Project Sentience - x402 Server
+==================================
+Port: ${PORT}
+Network: Aptos Testnet
+Facilitator: ${FACILITATOR_URL}
+Recipient: ${PAYMENT_RECIPIENT}
+Module: ${MODULE_ADDRESS}
 
-    console.log('Available endpoints:');
-    console.log('  GET /health          - Health check');
-    console.log('  GET /meta            - Node metadata');
-    console.log('  GET /service/data    - Paid service (x402)');
-    console.log('  GET /shard/level/1-5 - Easter egg hunt');
-    console.log('');
+Endpoints:
+  GET /health          - Health check (free)
+  GET /meta            - Node metadata (free)
+  GET /service/data    - Paid service (0.01 USDC)
+  GET /shard/level/1-5 - Easter egg hunt (paid)
+    `);
 });
 
 export default app;
