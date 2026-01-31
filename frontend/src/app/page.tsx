@@ -288,7 +288,7 @@ export default function Home() {
                                     ✅ Connected
                                 </div>
                                 <p style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)' }}>
-                                    {account.address.slice(0, 10)}...{account.address.slice(-8)}
+                                    {String(account.address).slice(0, 10)}...{String(account.address).slice(-8)}
                                 </p>
                                 <button
                                     onClick={disconnect}
