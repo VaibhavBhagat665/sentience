@@ -18,6 +18,7 @@ export default function Home() {
     const [shards, setShards] = useState<boolean[]>([false, false, false, false, false]);
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<'register' | 'hunt'>('register');
+    const [showCelebration, setShowCelebration] = useState(false);
     const [showWalletList, setShowWalletList] = useState(false);
 
     const connectWallet = async (walletName: string) => {
@@ -117,6 +118,7 @@ export default function Home() {
 
             await aptos.waitForTransaction({ transactionHash: response.hash });
             setStatus(`🏆 GENESIS PRIME NFT MINTED! TX: ${response.hash.slice(0, 10)}...`);
+            setShowCelebration(true);
         } catch (e: any) {
             setStatus('❌ ' + e.message);
         }
@@ -423,6 +425,85 @@ export default function Home() {
                         </a>
                     </div>
                 </div>
+
+                {/* Celebration Overlay */}
+                {showCelebration && (
+                    <div style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: 'rgba(0,0,0,0.9)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 1000,
+                        animation: 'fadeIn 0.5s ease'
+                    }}>
+                        <style>{`
+                            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+                            @keyframes confetti {
+                                0% { transform: translateY(-100vh) rotate(0deg); opacity: 1; }
+                                100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+                            }
+                            @keyframes bounce {
+                                0%, 100% { transform: scale(1); }
+                                50% { transform: scale(1.1); }
+                            }
+                            .confetti {
+                                position: fixed;
+                                width: 10px;
+                                height: 10px;
+                                animation: confetti 3s ease-out forwards;
+                            }
+                        `}</style>
+
+                        {/* Confetti particles */}
+                        {[...Array(50)].map((_, i) => (
+                            <div
+                                key={i}
+                                className="confetti"
+                                style={{
+                                    left: `${Math.random() * 100}%`,
+                                    top: '-10px',
+                                    background: ['#ff6b6b', '#4ecdc4', '#a855f7', '#fbbf24', '#ec4899', '#10b981'][i % 6],
+                                    borderRadius: i % 2 === 0 ? '50%' : '0',
+                                    animationDelay: `${Math.random() * 2}s`
+                                }}
+                            />
+                        ))}
+
+                        <div style={{ textAlign: 'center', zIndex: 1001 }}>
+                            <div style={{ fontSize: '6rem', marginBottom: '24px', animation: 'bounce 1s infinite' }}>
+                                🏆
+                            </div>
+                            <h1 style={{
+                                fontFamily: 'Fredoka, sans-serif',
+                                fontSize: 'clamp(2rem, 6vw, 3.5rem)',
+                                background: 'linear-gradient(135deg, #fbbf24, #ec4899, #a855f7)',
+                                WebkitBackgroundClip: 'text',
+                                WebkitTextFillColor: 'transparent',
+                                marginBottom: '16px'
+                            }}>
+                                GENESIS PRIME UNLOCKED!
+                            </h1>
+                            <p style={{ fontSize: '1.2rem', color: 'rgba(255,255,255,0.7)', marginBottom: '8px' }}>
+                                You found all 5 shards and assembled the Genesis NFT!
+                            </p>
+                            <p style={{ fontSize: '1rem', color: 'rgba(255,255,255,0.5)', marginBottom: '32px' }}>
+                                🧠 Welcome to Project Sentience
+                            </p>
+                            <button
+                                onClick={() => setShowCelebration(false)}
+                                className="glow-button"
+                                style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}
+                            >
+                                ✨ Continue
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </>
     );
