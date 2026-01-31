@@ -94,7 +94,7 @@ async function processPayment(paymentSignature: string, paymentRequired: string)
             return { success: false, error: `Settle failed: ${error}` };
         }
 
-        const result = await settleRes.json();
+        const result = await settleRes.json() as { txHash?: string; hash?: string };
         return { success: true, txHash: result.txHash || result.hash || 'completed' };
 
     } catch (error: any) {
