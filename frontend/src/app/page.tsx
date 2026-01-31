@@ -19,8 +19,8 @@ export default function Home() {
     const [agentEndpoint, setAgentEndpoint] = useState('');
     const [shards, setShards] = useState<boolean[]>([false, false, false, false, false]);
     const [loading, setLoading] = useState(false);
+    const [activeTab, setActiveTab] = useState<'register' | 'hunt'>('register');
 
-    // Check for Petra wallet
     useEffect(() => {
         checkWallet();
     }, []);
@@ -60,7 +60,7 @@ export default function Home() {
             return;
         }
         setLoading(true);
-        setStatus('Registering agent on-chain...');
+        setStatus('🔄 Registering agent on-chain...');
 
         try {
             const payload = {
@@ -84,10 +84,9 @@ export default function Home() {
             return;
         }
         setLoading(true);
-        setStatus(`Collecting shard ${level}...`);
+        setStatus(`🔮 Collecting shard ${level}...`);
 
         try {
-            // Initialize collection if first shard
             if (!shards.some(s => s)) {
                 const initPayload = {
                     type: 'entry_function_payload',
@@ -109,7 +108,7 @@ export default function Home() {
             const newShards = [...shards];
             newShards[level - 1] = true;
             setShards(newShards);
-            setStatus(`✅ Shard ${level} collected! TX: ${response.hash.slice(0, 10)}...`);
+            setStatus(`✨ Shard ${level} collected! TX: ${response.hash.slice(0, 10)}...`);
         } catch (e: any) {
             setStatus('❌ ' + e.message);
         }
@@ -122,7 +121,7 @@ export default function Home() {
             return;
         }
         setLoading(true);
-        setStatus('Assembling Genesis Prime NFT...');
+        setStatus('🌟 Assembling Genesis Prime NFT...');
 
         try {
             const payload = {
@@ -140,220 +139,406 @@ export default function Home() {
         setLoading(false);
     };
 
+    const shardNames = ['Observer 👁️', 'Sybil 🎭', 'Ghost 👻', 'Mirror 🪞', 'Void 🌀'];
+
     return (
-        <div style={{
-            minHeight: '100vh',
-            background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f23 100%)',
-            color: 'white',
-            fontFamily: 'system-ui, sans-serif',
-            padding: '20px'
-        }}>
-            {/* Header */}
-            <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-                <h1 style={{ fontSize: '3rem', margin: 0 }}>🧠 Project Sentience</h1>
-                <p style={{ color: '#888', fontSize: '1.2rem' }}>Autonomous Identity & Reputation for AI Agents</p>
-                <p style={{ color: '#666', fontSize: '0.9rem' }}>x402 Hackathon | Aptos Testnet</p>
-            </div>
+        <>
+            <style jsx global>{`
+                @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+                
+                * {
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }
+                
+                body {
+                    font-family: 'Space Grotesk', sans-serif;
+                    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+                    min-height: 100vh;
+                    overflow-x: hidden;
+                }
+                
+                .bg-blob {
+                    position: fixed;
+                    border-radius: 50%;
+                    filter: blur(80px);
+                    opacity: 0.5;
+                    animation: float 8s ease-in-out infinite;
+                    z-index: 0;
+                }
+                
+                .blob1 { width: 400px; height: 400px; background: #ff6b6b; top: -100px; left: -100px; }
+                .blob2 { width: 500px; height: 500px; background: #4ecdc4; bottom: -150px; right: -150px; animation-delay: -4s; }
+                .blob3 { width: 300px; height: 300px; background: #a855f7; top: 50%; left: 50%; animation-delay: -2s; }
+                
+                @keyframes float {
+                    0%, 100% { transform: translate(0, 0) scale(1); }
+                    50% { transform: translate(30px, 30px) scale(1.1); }
+                }
+                
+                .glass {
+                    background: rgba(255, 255, 255, 0.05);
+                    backdrop-filter: blur(20px);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 24px;
+                }
+                
+                .glow-button {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    border: none;
+                    color: white;
+                    padding: 16px 32px;
+                    font-size: 1.1rem;
+                    font-weight: 600;
+                    border-radius: 16px;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+                    font-family: 'Fredoka', sans-serif;
+                }
+                
+                .glow-button:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
+                }
+                
+                .glow-button:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                    transform: none;
+                }
+                
+                .input-field {
+                    width: 100%;
+                    padding: 16px 20px;
+                    border-radius: 16px;
+                    border: 2px solid rgba(255, 255, 255, 0.1);
+                    background: rgba(255, 255, 255, 0.05);
+                    color: white;
+                    font-size: 1rem;
+                    font-family: 'Space Grotesk', sans-serif;
+                    transition: all 0.3s ease;
+                }
+                
+                .input-field:focus {
+                    outline: none;
+                    border-color: #667eea;
+                    box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
+                }
+                
+                .input-field::placeholder {
+                    color: rgba(255, 255, 255, 0.4);
+                }
+                
+                .shard-btn {
+                    flex: 1;
+                    min-width: 100px;
+                    padding: 24px 12px;
+                    border-radius: 20px;
+                    border: 2px solid rgba(255, 255, 255, 0.1);
+                    background: rgba(255, 255, 255, 0.05);
+                    color: white;
+                    font-size: 0.9rem;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                    font-family: 'Fredoka', sans-serif;
+                }
+                
+                .shard-btn:hover:not(:disabled) {
+                    transform: translateY(-4px);
+                    border-color: #667eea;
+                    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+                }
+                
+                .shard-btn.collected {
+                    background: linear-gradient(135deg, #10b981, #059669);
+                    border-color: #10b981;
+                }
+                
+                .tab-btn {
+                    padding: 12px 24px;
+                    border-radius: 12px;
+                    border: none;
+                    background: transparent;
+                    color: rgba(255, 255, 255, 0.5);
+                    font-size: 1rem;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                    font-family: 'Fredoka', sans-serif;
+                }
+                
+                .tab-btn.active {
+                    background: rgba(255, 255, 255, 0.1);
+                    color: white;
+                }
+                
+                .genesis-btn {
+                    padding: 24px 48px;
+                    font-size: 1.4rem;
+                    background: linear-gradient(135deg, #f59e0b, #ef4444, #ec4899);
+                    animation: pulse 2s infinite;
+                }
+                
+                @keyframes pulse {
+                    0%, 100% { box-shadow: 0 0 20px rgba(245, 158, 11, 0.5); }
+                    50% { box-shadow: 0 0 40px rgba(239, 68, 68, 0.8); }
+                }
+            `}</style>
 
-            {/* Wallet Connection */}
-            <div style={{
-                background: 'rgba(255,255,255,0.05)',
-                borderRadius: '16px',
-                padding: '20px',
-                maxWidth: '600px',
-                margin: '0 auto 30px',
-                textAlign: 'center'
-            }}>
-                {wallet.connected ? (
-                    <div>
-                        <p style={{ color: '#4ade80' }}>✅ Connected</p>
-                        <p style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: '#888' }}>
-                            {wallet.address?.slice(0, 8)}...{wallet.address?.slice(-6)}
+            <div style={{ minHeight: '100vh', color: 'white', position: 'relative', padding: '20px' }}>
+                {/* Animated Background Blobs */}
+                <div className="bg-blob blob1"></div>
+                <div className="bg-blob blob2"></div>
+                <div className="bg-blob blob3"></div>
+
+                {/* Content */}
+                <div style={{ position: 'relative', zIndex: 1, maxWidth: '700px', margin: '0 auto' }}>
+
+                    {/* Header */}
+                    <div style={{ textAlign: 'center', marginBottom: '40px', paddingTop: '40px' }}>
+                        <h1 style={{
+                            fontFamily: 'Fredoka, sans-serif',
+                            fontSize: 'clamp(2.5rem, 8vw, 4rem)',
+                            fontWeight: 700,
+                            background: 'linear-gradient(135deg, #fff, #a855f7, #ec4899)',
+                            WebkitBackgroundClip: 'text',
+                            WebkitTextFillColor: 'transparent',
+                            marginBottom: '12px'
+                        }}>
+                            🧠 Sentience
+                        </h1>
+                        <p style={{
+                            fontSize: '1.2rem',
+                            color: 'rgba(255,255,255,0.7)',
+                            fontFamily: 'Fredoka, sans-serif'
+                        }}>
+                            AI Agent Identity Protocol ✨
                         </p>
-                        <p style={{ color: '#fbbf24' }}>{wallet.balance.toFixed(4)} APT</p>
+                        <p style={{
+                            fontSize: '0.9rem',
+                            color: 'rgba(255,255,255,0.4)',
+                            marginTop: '8px'
+                        }}>
+                            x402 Hackathon • Aptos Testnet
+                        </p>
                     </div>
-                ) : (
-                    <button
-                        onClick={connectWallet}
-                        style={{
-                            background: 'linear-gradient(90deg, #8b5cf6, #ec4899)',
-                            border: 'none',
-                            color: 'white',
-                            padding: '15px 40px',
-                            fontSize: '1.1rem',
-                            borderRadius: '12px',
-                            cursor: 'pointer'
-                        }}
-                    >
-                        🔗 Connect Petra Wallet
-                    </button>
-                )}
-            </div>
 
-            {/* Status */}
-            {status && (
-                <div style={{
-                    background: 'rgba(0,0,0,0.3)',
-                    padding: '15px',
-                    borderRadius: '8px',
-                    maxWidth: '600px',
-                    margin: '0 auto 30px',
-                    textAlign: 'center',
-                    fontFamily: 'monospace'
-                }}>
-                    {status}
-                </div>
-            )}
+                    {/* Wallet Card */}
+                    <div className="glass" style={{ padding: '24px', marginBottom: '24px', textAlign: 'center' }}>
+                        {wallet.connected ? (
+                            <div>
+                                <div style={{
+                                    display: 'inline-block',
+                                    padding: '8px 16px',
+                                    background: 'rgba(16, 185, 129, 0.2)',
+                                    borderRadius: '100px',
+                                    color: '#10b981',
+                                    fontWeight: 600,
+                                    marginBottom: '12px'
+                                }}>
+                                    ✅ Connected
+                                </div>
+                                <p style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)' }}>
+                                    {wallet.address?.slice(0, 10)}...{wallet.address?.slice(-8)}
+                                </p>
+                                <p style={{
+                                    fontSize: '1.5rem',
+                                    fontWeight: 700,
+                                    color: '#fbbf24',
+                                    fontFamily: 'Fredoka, sans-serif',
+                                    marginTop: '8px'
+                                }}>
+                                    {wallet.balance.toFixed(4)} APT
+                                </p>
+                            </div>
+                        ) : (
+                            <button onClick={connectWallet} className="glow-button" style={{ width: '100%' }}>
+                                🔗 Connect Petra Wallet
+                            </button>
+                        )}
+                    </div>
 
-            {/* Agent Registration */}
-            <div style={{
-                background: 'rgba(255,255,255,0.05)',
-                borderRadius: '16px',
-                padding: '25px',
-                maxWidth: '600px',
-                margin: '0 auto 30px'
-            }}>
-                <h2 style={{ marginTop: 0 }}>🤖 Register Agent Identity</h2>
-                <input
-                    type="text"
-                    placeholder="Agent Name"
-                    value={agentName}
-                    onChange={(e) => setAgentName(e.target.value)}
-                    style={{
-                        width: '100%',
-                        padding: '12px',
-                        marginBottom: '10px',
-                        borderRadius: '8px',
-                        border: 'none',
-                        background: 'rgba(255,255,255,0.1)',
-                        color: 'white'
-                    }}
-                />
-                <input
-                    type="text"
-                    placeholder="Description"
-                    value={agentDesc}
-                    onChange={(e) => setAgentDesc(e.target.value)}
-                    style={{
-                        width: '100%',
-                        padding: '12px',
-                        marginBottom: '10px',
-                        borderRadius: '8px',
-                        border: 'none',
-                        background: 'rgba(255,255,255,0.1)',
-                        color: 'white'
-                    }}
-                />
-                <input
-                    type="text"
-                    placeholder="Endpoint URL"
-                    value={agentEndpoint}
-                    onChange={(e) => setAgentEndpoint(e.target.value)}
-                    style={{
-                        width: '100%',
-                        padding: '12px',
-                        marginBottom: '15px',
-                        borderRadius: '8px',
-                        border: 'none',
-                        background: 'rgba(255,255,255,0.1)',
-                        color: 'white'
-                    }}
-                />
-                <button
-                    onClick={registerAgent}
-                    disabled={loading || !wallet.connected}
-                    style={{
-                        width: '100%',
-                        padding: '15px',
-                        background: loading ? '#555' : 'linear-gradient(90deg, #06b6d4, #3b82f6)',
-                        border: 'none',
-                        color: 'white',
-                        borderRadius: '8px',
-                        cursor: loading ? 'not-allowed' : 'pointer',
-                        fontSize: '1rem'
-                    }}
-                >
-                    {loading ? 'Processing...' : '📝 Register On-Chain'}
-                </button>
-            </div>
-
-            {/* Easter Egg Hunt */}
-            <div style={{
-                background: 'rgba(255,255,255,0.05)',
-                borderRadius: '16px',
-                padding: '25px',
-                maxWidth: '600px',
-                margin: '0 auto 30px'
-            }}>
-                <h2 style={{ marginTop: 0 }}>🔮 Easter Egg Hunt</h2>
-                <p style={{ color: '#888' }}>Collect all 5 shards to mint the Genesis Prime NFT!</p>
-
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '20px' }}>
-                    {[1, 2, 3, 4, 5].map((level) => (
-                        <button
-                            key={level}
-                            onClick={() => collectShard(level)}
-                            disabled={loading || shards[level - 1]}
-                            style={{
-                                flex: 1,
-                                minWidth: '100px',
-                                padding: '20px 10px',
-                                background: shards[level - 1]
-                                    ? 'linear-gradient(135deg, #4ade80, #22c55e)'
-                                    : 'rgba(255,255,255,0.1)',
-                                border: 'none',
-                                color: 'white',
-                                borderRadius: '12px',
-                                cursor: shards[level - 1] ? 'default' : 'pointer',
-                                fontSize: '1rem'
-                            }}
-                        >
-                            {shards[level - 1] ? '✅' : `Shard ${level}`}
-                        </button>
-                    ))}
-                </div>
-
-                <div style={{ marginTop: '20px', textAlign: 'center' }}>
-                    <p>Progress: {shards.filter(s => s).length}/5</p>
-                    {shards.every(s => s) && (
-                        <button
-                            onClick={assembleGenesis}
-                            disabled={loading}
-                            style={{
-                                marginTop: '15px',
-                                padding: '20px 40px',
-                                background: 'linear-gradient(135deg, #f59e0b, #ef4444)',
-                                border: 'none',
-                                color: 'white',
-                                borderRadius: '12px',
-                                cursor: 'pointer',
-                                fontSize: '1.2rem',
-                                fontWeight: 'bold'
-                            }}
-                        >
-                            🏆 ASSEMBLE GENESIS PRIME
-                        </button>
+                    {/* Status */}
+                    {status && (
+                        <div className="glass" style={{
+                            padding: '16px',
+                            marginBottom: '24px',
+                            textAlign: 'center',
+                            fontFamily: 'monospace',
+                            fontSize: '0.95rem'
+                        }}>
+                            {status}
+                        </div>
                     )}
+
+                    {/* Tabs */}
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', justifyContent: 'center' }}>
+                        <button
+                            className={`tab-btn ${activeTab === 'register' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('register')}
+                        >
+                            🤖 Register Agent
+                        </button>
+                        <button
+                            className={`tab-btn ${activeTab === 'hunt' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('hunt')}
+                        >
+                            🔮 Easter Egg Hunt
+                        </button>
+                    </div>
+
+                    {/* Register Agent Tab */}
+                    {activeTab === 'register' && (
+                        <div className="glass" style={{ padding: '32px' }}>
+                            <h2 style={{
+                                fontFamily: 'Fredoka, sans-serif',
+                                fontSize: '1.5rem',
+                                marginBottom: '24px',
+                                textAlign: 'center'
+                            }}>
+                                🤖 Create Your AI Agent
+                            </h2>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                <input
+                                    type="text"
+                                    placeholder="Agent Name (e.g. CryptoBot-3000)"
+                                    value={agentName}
+                                    onChange={(e) => setAgentName(e.target.value)}
+                                    className="input-field"
+                                />
+                                <input
+                                    type="text"
+                                    placeholder="Description (e.g. Trading assistant)"
+                                    value={agentDesc}
+                                    onChange={(e) => setAgentDesc(e.target.value)}
+                                    className="input-field"
+                                />
+                                <input
+                                    type="text"
+                                    placeholder="Endpoint URL (e.g. https://api.mybot.com)"
+                                    value={agentEndpoint}
+                                    onChange={(e) => setAgentEndpoint(e.target.value)}
+                                    className="input-field"
+                                />
+                                <button
+                                    onClick={registerAgent}
+                                    disabled={loading || !wallet.connected}
+                                    className="glow-button"
+                                    style={{ marginTop: '8px' }}
+                                >
+                                    {loading ? '⏳ Processing...' : '📝 Register On-Chain'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Easter Egg Hunt Tab */}
+                    {activeTab === 'hunt' && (
+                        <div className="glass" style={{ padding: '32px' }}>
+                            <h2 style={{
+                                fontFamily: 'Fredoka, sans-serif',
+                                fontSize: '1.5rem',
+                                marginBottom: '8px',
+                                textAlign: 'center'
+                            }}>
+                                🔮 Collect 5 Shards
+                            </h2>
+                            <p style={{
+                                color: 'rgba(255,255,255,0.5)',
+                                textAlign: 'center',
+                                marginBottom: '24px'
+                            }}>
+                                Complete all levels to mint the Genesis Prime NFT!
+                            </p>
+
+                            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '24px' }}>
+                                {[1, 2, 3, 4, 5].map((level) => (
+                                    <button
+                                        key={level}
+                                        onClick={() => collectShard(level)}
+                                        disabled={loading || shards[level - 1]}
+                                        className={`shard-btn ${shards[level - 1] ? 'collected' : ''}`}
+                                    >
+                                        {shards[level - 1] ? '✅' : shardNames[level - 1]}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Progress Bar */}
+                            <div style={{ marginBottom: '24px' }}>
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    marginBottom: '8px',
+                                    fontFamily: 'Fredoka, sans-serif'
+                                }}>
+                                    <span>Progress</span>
+                                    <span>{shards.filter(s => s).length}/5</span>
+                                </div>
+                                <div style={{
+                                    height: '12px',
+                                    background: 'rgba(255,255,255,0.1)',
+                                    borderRadius: '100px',
+                                    overflow: 'hidden'
+                                }}>
+                                    <div style={{
+                                        width: `${(shards.filter(s => s).length / 5) * 100}%`,
+                                        height: '100%',
+                                        background: 'linear-gradient(90deg, #667eea, #764ba2, #ec4899)',
+                                        borderRadius: '100px',
+                                        transition: 'width 0.5s ease'
+                                    }}></div>
+                                </div>
+                            </div>
+
+                            {shards.every(s => s) && (
+                                <div style={{ textAlign: 'center' }}>
+                                    <button
+                                        onClick={assembleGenesis}
+                                        disabled={loading}
+                                        className="glow-button genesis-btn"
+                                    >
+                                        🏆 MINT GENESIS PRIME
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Footer */}
+                    <div style={{
+                        textAlign: 'center',
+                        marginTop: '40px',
+                        paddingBottom: '40px',
+                        color: 'rgba(255,255,255,0.4)'
+                    }}>
+                        <p style={{ marginBottom: '8px' }}>
+                            🔮 <span style={{ color: '#a855f7' }}>Easter Egg:</span> Find the Magic Spell in{' '}
+                            <code style={{
+                                background: 'rgba(168, 85, 247, 0.2)',
+                                padding: '4px 8px',
+                                borderRadius: '6px',
+                                color: '#a855f7'
+                            }}>reputation.move</code>
+                        </p>
+                        <a
+                            href={`https://explorer.aptoslabs.com/account/${MODULE_ADDRESS}?network=testnet`}
+                            target="_blank"
+                            style={{
+                                color: '#667eea',
+                                textDecoration: 'none',
+                                fontSize: '0.9rem'
+                            }}
+                        >
+                            View Smart Contracts on Explorer →
+                        </a>
+                    </div>
                 </div>
             </div>
-
-            {/* Magic Spell */}
-            <div style={{
-                textAlign: 'center',
-                padding: '20px',
-                color: '#666'
-            }}>
-                <p>🔮 Hidden Easter Egg: Find the Magic Spell in the <code style={{ color: '#8b5cf6' }}>reputation.move</code> contract!</p>
-                <p style={{ fontSize: '0.8rem' }}>
-                    Contract: <a
-                        href={`https://explorer.aptoslabs.com/account/${MODULE_ADDRESS}?network=testnet`}
-                        target="_blank"
-                        style={{ color: '#3b82f6' }}
-                    >
-                        View on Explorer
-                    </a>
-                </p>
-            </div>
-        </div>
+        </>
     );
 }
