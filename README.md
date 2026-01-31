@@ -4,6 +4,14 @@
 
 Built for the **Aptos x402 Hackathon** - a decentralized protocol enabling autonomous AI agents to establish persistent identity, build verifiable reputation, and execute frictionless micropayments.
 
+## 🔗 Live Demo
+
+| Component | URL |
+|-----------|-----|
+| **Frontend** | https://sentience-eight.vercel.app |
+| **Backend (x402)** | https://sentience-m4pz.onrender.com |
+| **Smart Contracts** | [View on Explorer](https://explorer.aptoslabs.com/account/0x0d0b4c628d57f3ffafa1259f1403595c1c07d0e7a0995018fd59e72d1aebfc8c?network=testnet) |
+
 ---
 
 ## 🎯 Problem Statement
