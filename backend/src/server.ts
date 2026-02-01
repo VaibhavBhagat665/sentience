@@ -23,14 +23,15 @@ const PAYMENT_RECIPIENT = process.env.PAYMENT_RECIPIENT_ADDRESS || '0x0d0b4c628d
 const FACILITATOR_URL = process.env.FACILITATOR_URL || 'https://x402-navy.vercel.app/facilitator';
 const MODULE_ADDRESS = process.env.MODULE_ADDRESS || '0x0d0b4c628d57f3ffafa1259f1403595c1c07d0e7a0995018fd59e72d1aebfc8c';
 
-// Testnet USDC fungible asset address
-const USDC_ASSET = '0x69091fbab5f7d635ee7ac5098cf0c1efbe31d68fec0f2cd565e8d168daf52832';
+// Testnet APT (0xa) - Using native APT ensures users can pay via Faucet
+const USDC_ASSET = '0xa';
 
 // Price tiers (in USDC units, 6 decimals)
+// Price tiers (in Octas, 8 decimals) - kept very low for testing
 const PRICES = {
-    basic: '10000',      // 0.01 USDC
-    premium: '100000',   // 0.1 USDC
-    high: '1000000'      // 1 USDC
+    basic: '100',        // 100 Octas (tiny amount)
+    premium: '500',      // 500 Octas
+    high: '1000'         // 1000 Octas
 };
 
 /**
