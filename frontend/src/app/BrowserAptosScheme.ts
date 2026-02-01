@@ -56,15 +56,27 @@ export class BrowserAptosScheme implements SchemeNetworkClient {
         let transactionData: any;
 
         if (isCoin) {
-            // Use 0x1::coin::transfer
-            transactionData = {
-                function: "0x1::coin::transfer",
-                typeArguments: [paymentRequirements.asset],
-                functionArguments: [
-                    paymentRequirements.payTo,
-                    paymentRequirements.amount,
-                ]
-            };
+            if (paymentRequirements.asset === '0x1::aptos_coin::AptosCoin') {
+                // Use 0x1::aptos_account::transfer (Handles auto-registration of recipient)
+                transactionData = {
+                    function: "0x1::aptos_account::transfer",
+                    typeArguments: [],
+                    functionArguments: [
+                        paymentRequirements.payTo,
+                        paymentRequirements.amount,
+                    ]
+                };
+            } else {
+                // Use Generic 0x1::coin::transfer
+                transactionData = {
+                    function: "0x1::coin::transfer",
+                    typeArguments: [paymentRequirements.asset],
+                    functionArguments: [
+                        paymentRequirements.payTo,
+                        paymentRequirements.amount,
+                    ]
+                };
+            }
         } else {
             // Use FA transfer
             transactionData = {
