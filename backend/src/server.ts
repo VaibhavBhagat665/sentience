@@ -29,8 +29,8 @@ const USDC_ASSET = '0x1::aptos_coin::AptosCoin';
 // Price tiers (in USDC units, 6 decimals)
 // Price tiers (in Octas, 8 decimals) - kept very low for testing
 const PRICES = {
-    basic: '100',        // 100 Octas (tiny amount)
-    premium: '500',      // 500 Octas
+    basic: '1',          // 1 Octa (Absolute minimum)
+    premium: '100',      // 100 Octas
     high: '1000'         // 1000 Octas
 };
 
