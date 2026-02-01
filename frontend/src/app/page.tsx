@@ -48,9 +48,9 @@ export default function Home() {
                 signTransaction
             );
 
-            // Register for Aptos Testnet (CAIP-2 identifier)
-            // Casting network to any to avoid importing x402 core types
-            x402client.register("aptos:testnet" as any, browserScheme);
+            // Register for Aptos Testnet (CAIP-2 ID: aptos:2)
+            // This matches the server's payment requirement
+            x402client.register("aptos:2" as any, browserScheme);
 
             const wrappedFetch = wrapFetchWithPayment(fetch, x402client);
 
