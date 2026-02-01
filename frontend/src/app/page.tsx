@@ -124,7 +124,7 @@ export default function Home() {
     };
 
     const collectShard = async (level: number) => {
-        if (!walletAddress) {
+        if (!connected) {
             setStatus('Connect wallet first!');
             return;
         }
@@ -272,7 +272,7 @@ export default function Home() {
 
                     {/* Wallet Card */}
                     <div className="glass" style={{ padding: '24px', marginBottom: '24px', textAlign: 'center' }}>
-                        {walletAddress ? (
+                        {connected && account ? (
                             <div>
                                 <div style={{
                                     display: 'inline-block',
@@ -286,7 +286,7 @@ export default function Home() {
                                     ✅ Connected to Wallet
                                 </div>
                                 <p style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)' }}>
-                                    {walletAddress.slice(0, 10)}...{walletAddress.slice(-8)}
+                                    {account.address.toString().slice(0, 10)}...{account.address.toString().slice(-8)}
                                 </p>
                                 {!connected ? (
                                     <button
@@ -338,7 +338,7 @@ export default function Home() {
                                 💳 x402 Payment Protocol Demo
                             </h2>
                             <p style={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginBottom: '24px', fontSize: '0.9rem' }}>
-                                {walletAddress
+                                {connected
                                     ? "Click below to make auto-paid requests using your wallet signature!"
                                     : "Connect wallet to enable automatic x402 payments."
                                 }
@@ -351,7 +351,7 @@ export default function Home() {
                                     className="glow-button"
                                     style={{ width: '100%' }}
                                 >
-                                    {x402Loading ? '⏳ Paid Request in progress...' : (walletAddress ? '🤖 Call Premium Agents API ($0.01)' : '🤖 Call API (Will return 402)')}
+                                    {x402Loading ? '⏳ Paid Request in progress...' : (connected ? '🤖 Call Premium Agents API ($0.01)' : '🤖 Call API (Will return 402)')}
                                 </button>
                                 <button
                                     onClick={() => callX402Api('/api/premium/shard/1')}
