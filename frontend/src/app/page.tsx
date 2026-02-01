@@ -300,12 +300,12 @@ export default function Home() {
                                         onClick={disconnect}
                                         className="bg-red-500 hover:bg-red-400 text-white font-bold py-2 px-6 rounded-full transition-all"
                                     >
-                                        🛑 Disconnect ({account?.address?.slice(0, 6)}...)
+                                        🛑 Disconnect ({account?.address?.toString().slice(0, 6)}...)
                                     </button>
                                 )}
                             </div>
                         ) : (
-                            <button onClick={connectWallet} className="glow-button" style={{ width: '100%' }}>
+                            <button onClick={handleConnect} className="glow-button" style={{ width: '100%' }}>
                                 🔗 Connect Petra Wallet
                             </button>
                         )}
