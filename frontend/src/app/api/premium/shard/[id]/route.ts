@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 const shardData: Record<string, any> = {
     '1': {
@@ -39,10 +39,10 @@ const shardData: Record<string, any> = {
 };
 
 export async function GET(
-    request: Request,
-    { params }: { params: { id: string } }
+    request: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
 ) {
-    const id = params.id;
+    const { id } = await params;
     const shard = shardData[id];
 
     if (!shard) {

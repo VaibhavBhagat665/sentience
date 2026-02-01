@@ -1,8 +1,14 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { Account, Ed25519PrivateKey } from '@aptos-labs/ts-sdk';
+import { x402Client, wrapFetchWithPayment } from '@rvk_rishikesh/fetch';
+import { registerExactAptosScheme } from '@rvk_rishikesh/aptos/exact/client';
 
 const MODULE_ADDRESS = '0x0d0b4c628d57f3ffafa1259f1403595c1c07d0e7a0995018fd59e72d1aebfc8c';
+
+// Demo private key for testing (in production, use wallet connection)
+const DEMO_PRIVATE_KEY = process.env.NEXT_PUBLIC_PRIVATE_KEY;
 
 export default function Home() {
     const [walletAddress, setWalletAddress] = useState<string | null>(null);
@@ -12,135 +18,37 @@ export default function Home() {
     const [agentEndpoint, setAgentEndpoint] = useState('');
     const [shards, setShards] = useState<boolean[]>([false, false, false, false, false]);
     const [loading, setLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState<'register' | 'hunt' | 'x402'>('register');
+    const [activeTab, setActiveTab] = useState<'register' | 'hunt' | 'x402'>('x402');
     const [showCelebration, setShowCelebration] = useState(false);
     const [x402Response, setX402Response] = useState<any>(null);
     const [x402Loading, setX402Loading] = useState(false);
+    const [fetchWithPayment, setFetchWithPayment] = useState<any>(null);
 
     useEffect(() => {
-        checkConnection();
-    }, []);
-
-    const checkConnection = async () => {
-        if (typeof window !== 'undefined' && window.aptos) {
+        // Initialize x402 client with Aptos account
+        if (DEMO_PRIVATE_KEY) {
             try {
-                const isConnected = await window.aptos.isConnected();
-                if (isConnected) {
-                    const account = await window.aptos.account();
-                    setWalletAddress(account.address);
-                }
-            } catch (e) {
-                console.log('Not connected');
+                const privateKeyHex = DEMO_PRIVATE_KEY.startsWith('0x')
+                    ? DEMO_PRIVATE_KEY.slice(2)
+                    : DEMO_PRIVATE_KEY;
+
+                const privateKey = new Ed25519PrivateKey(privateKeyHex);
+                const aptosAccount = Account.fromPrivateKey({ privateKey });
+
+                const x402client = new x402Client();
+                registerExactAptosScheme(x402client, { signer: aptosAccount });
+                const wrappedFetch = wrapFetchWithPayment(fetch, x402client);
+
+                setWalletAddress(aptosAccount.accountAddress.toString());
+                setFetchWithPayment(() => wrappedFetch);
+                setStatus('✅ x402 Client initialized!');
+            } catch (err: any) {
+                setStatus('⚠️ Demo mode - add NEXT_PUBLIC_PRIVATE_KEY for auto-pay');
             }
+        } else {
+            setStatus('⚠️ Demo mode - add NEXT_PUBLIC_PRIVATE_KEY for auto-pay');
         }
-    };
-
-    const connectWallet = async () => {
-        if (typeof window === 'undefined' || !window.aptos) {
-            setStatus('❌ Please install Petra wallet!');
-            window.open('https://petra.app', '_blank');
-            return;
-        }
-        try {
-            const response = await window.aptos.connect();
-            setWalletAddress(response.address);
-            setStatus('✅ Wallet connected!');
-        } catch (e: any) {
-            setStatus('❌ ' + e.message);
-        }
-    };
-
-    const disconnectWallet = async () => {
-        if (window.aptos) {
-            await window.aptos.disconnect();
-            setWalletAddress(null);
-            setStatus('Disconnected');
-        }
-    };
-
-    const registerAgent = async () => {
-        if (!walletAddress || !window.aptos) {
-            setStatus('Connect wallet first!');
-            return;
-        }
-        setLoading(true);
-        setStatus('🔄 Registering agent on-chain...');
-
-        try {
-            const response = await window.aptos.signAndSubmitTransaction({
-                type: 'entry_function_payload',
-                function: `${MODULE_ADDRESS}::identity::register_agent`,
-                type_arguments: [],
-                arguments: [agentName, agentDesc, agentEndpoint, false]
-            });
-            setStatus(`✅ Agent registered! TX: ${response.hash.slice(0, 10)}...`);
-        } catch (e: any) {
-            setStatus('❌ ' + e.message);
-        }
-        setLoading(false);
-    };
-
-    const collectShard = async (level: number) => {
-        if (!walletAddress || !window.aptos) {
-            setStatus('Connect wallet first!');
-            return;
-        }
-        setLoading(true);
-        setStatus(`🔮 Collecting shard ${level}...`);
-
-        try {
-            if (!shards.some(s => s)) {
-                await window.aptos.signAndSubmitTransaction({
-                    type: 'entry_function_payload',
-                    function: `${MODULE_ADDRESS}::genesis::init_collection`,
-                    type_arguments: [],
-                    arguments: []
-                });
-            }
-
-            const response = await window.aptos.signAndSubmitTransaction({
-                type: 'entry_function_payload',
-                function: `${MODULE_ADDRESS}::genesis::collect_shard`,
-                type_arguments: [],
-                arguments: [level]
-            });
-
-            const newShards = [...shards];
-            newShards[level - 1] = true;
-            setShards(newShards);
-            setStatus(`✨ Shard ${level} collected! TX: ${response.hash.slice(0, 10)}...`);
-        } catch (e: any) {
-            setStatus('❌ ' + e.message);
-        }
-        setLoading(false);
-    };
-
-    const assembleGenesis = async () => {
-        if (!shards.every(s => s)) {
-            setStatus('Collect all 5 shards first!');
-            return;
-        }
-        if (!walletAddress || !window.aptos) {
-            setStatus('Connect wallet first!');
-            return;
-        }
-        setLoading(true);
-        setStatus('🌟 Assembling Genesis Prime NFT...');
-
-        try {
-            const response = await window.aptos.signAndSubmitTransaction({
-                type: 'entry_function_payload',
-                function: `${MODULE_ADDRESS}::genesis::assemble`,
-                type_arguments: [],
-                arguments: []
-            });
-            setStatus(`🏆 GENESIS PRIME NFT MINTED! TX: ${response.hash.slice(0, 10)}...`);
-            setShowCelebration(true);
-        } catch (e: any) {
-            setStatus('❌ ' + e.message);
-        }
-        setLoading(false);
-    };
+    }, []);
 
     // x402 Demo: Call premium API
     const callX402Api = async (endpoint: string) => {
@@ -149,18 +57,18 @@ export default function Home() {
         setStatus(`💳 Calling x402 API: ${endpoint}...`);
 
         try {
+            // Use regular fetch first to show 402 response
             const response = await fetch(endpoint);
 
             if (response.status === 402) {
-                const paymentRequired = response.headers.get('x-payment');
-                const paymentRequiredAlt = response.headers.get('payment-required');
+                const paymentRequired = response.headers.get('payment-required');
                 setX402Response({
                     status: 402,
                     message: 'Payment Required!',
-                    paymentInfo: paymentRequired || paymentRequiredAlt || 'x402 payment needed',
+                    paymentInfo: paymentRequired || 'x402 payment needed',
                     headers: Object.fromEntries(response.headers.entries())
                 });
-                setStatus('💰 402 Payment Required - x402 protocol working!');
+                setStatus('💰 402 Payment Required - This is how x402 works!');
             } else if (response.ok) {
                 const data = await response.json();
                 setX402Response({
@@ -169,6 +77,42 @@ export default function Home() {
                     data
                 });
                 setStatus('✅ API call successful!');
+            } else {
+                setX402Response({
+                    status: response.status,
+                    message: response.statusText
+                });
+            }
+        } catch (e: any) {
+            setStatus('❌ ' + e.message);
+            setX402Response({ error: e.message });
+        }
+        setX402Loading(false);
+    };
+
+    // Call with auto-payment (using wrapped fetch)
+    const callX402WithPayment = async (endpoint: string) => {
+        if (!fetchWithPayment) {
+            setStatus('⚠️ Set NEXT_PUBLIC_PRIVATE_KEY for auto-pay');
+            return;
+        }
+
+        setX402Loading(true);
+        setX402Response(null);
+        setStatus(`💳 Calling with auto-pay: ${endpoint}...`);
+
+        try {
+            const response = await fetchWithPayment(endpoint, { method: 'GET' });
+
+            if (response.ok) {
+                const data = await response.json();
+                setX402Response({
+                    status: 200,
+                    message: 'Success with auto-payment!',
+                    data,
+                    transactionHash: response.headers.get('payment-response') || 'paid'
+                });
+                setStatus('✅ Paid and received data!');
             } else {
                 setX402Response({
                     status: response.status,
@@ -329,30 +273,29 @@ export default function Home() {
                                     fontWeight: 600,
                                     marginBottom: '12px'
                                 }}>
-                                    ✅ Connected
+                                    ✅ x402 Client Ready
                                 </div>
                                 <p style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)' }}>
                                     {walletAddress.slice(0, 10)}...{walletAddress.slice(-8)}
                                 </p>
-                                <button
-                                    onClick={disconnectWallet}
-                                    style={{
-                                        marginTop: '12px',
-                                        padding: '8px 16px',
-                                        background: 'rgba(239, 68, 68, 0.2)',
-                                        border: '1px solid rgba(239, 68, 68, 0.3)',
-                                        borderRadius: '8px',
-                                        color: '#ef4444',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    Disconnect
-                                </button>
                             </div>
                         ) : (
-                            <button onClick={connectWallet} className="glow-button" style={{ width: '100%' }}>
-                                🔗 Connect Petra Wallet
-                            </button>
+                            <div>
+                                <div style={{
+                                    display: 'inline-block',
+                                    padding: '8px 16px',
+                                    background: 'rgba(251, 191, 36, 0.2)',
+                                    borderRadius: '100px',
+                                    color: '#fbbf24',
+                                    fontWeight: 600,
+                                    marginBottom: '12px'
+                                }}>
+                                    ⚠️ Demo Mode
+                                </div>
+                                <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)' }}>
+                                    x402 APIs work without wallet connection
+                                </p>
+                            </div>
                         )}
                     </div>
 
@@ -365,72 +308,16 @@ export default function Home() {
 
                     {/* Tabs */}
                     <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                        <button className={`tab-btn ${activeTab === 'register' ? 'active' : ''}`} onClick={() => setActiveTab('register')}>
-                            🤖 Register Agent
+                        <button className={`tab-btn ${activeTab === 'x402' ? 'active' : ''}`} onClick={() => setActiveTab('x402')}>
+                            💳 x402 Demo
                         </button>
                         <button className={`tab-btn ${activeTab === 'hunt' ? 'active' : ''}`} onClick={() => setActiveTab('hunt')}>
                             🔮 Easter Egg Hunt
                         </button>
-                        <button className={`tab-btn ${activeTab === 'x402' ? 'active' : ''}`} onClick={() => setActiveTab('x402')}>
-                            💳 x402 Demo
+                        <button className={`tab-btn ${activeTab === 'register' ? 'active' : ''}`} onClick={() => setActiveTab('register')}>
+                            🤖 About
                         </button>
                     </div>
-
-                    {/* Register Agent Tab */}
-                    {activeTab === 'register' && (
-                        <div className="glass" style={{ padding: '32px' }}>
-                            <h2 style={{ fontFamily: 'Fredoka, sans-serif', fontSize: '1.5rem', marginBottom: '24px', textAlign: 'center' }}>
-                                🤖 Create Your AI Agent
-                            </h2>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                                <input type="text" placeholder="Agent Name" value={agentName} onChange={(e) => setAgentName(e.target.value)} className="input-field" />
-                                <input type="text" placeholder="Description" value={agentDesc} onChange={(e) => setAgentDesc(e.target.value)} className="input-field" />
-                                <input type="text" placeholder="Endpoint URL" value={agentEndpoint} onChange={(e) => setAgentEndpoint(e.target.value)} className="input-field" />
-                                <button onClick={registerAgent} disabled={loading || !walletAddress} className="glow-button" style={{ marginTop: '8px' }}>
-                                    {loading ? '⏳ Processing...' : '📝 Register On-Chain'}
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Easter Egg Hunt Tab */}
-                    {activeTab === 'hunt' && (
-                        <div className="glass" style={{ padding: '32px' }}>
-                            <h2 style={{ fontFamily: 'Fredoka, sans-serif', fontSize: '1.5rem', marginBottom: '8px', textAlign: 'center' }}>
-                                🔮 Collect 5 Shards
-                            </h2>
-                            <p style={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginBottom: '24px' }}>
-                                Complete all levels to mint the Genesis Prime NFT!
-                            </p>
-
-                            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '24px' }}>
-                                {[1, 2, 3, 4, 5].map((level) => (
-                                    <button key={level} onClick={() => collectShard(level)} disabled={loading || shards[level - 1]} className={`shard-btn ${shards[level - 1] ? 'collected' : ''}`}>
-                                        {shards[level - 1] ? '✅' : shardNames[level - 1]}
-                                    </button>
-                                ))}
-                            </div>
-
-                            {/* Progress Bar */}
-                            <div style={{ marginBottom: '24px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontFamily: 'Fredoka, sans-serif' }}>
-                                    <span>Progress</span>
-                                    <span>{shards.filter(s => s).length}/5</span>
-                                </div>
-                                <div style={{ height: '12px', background: 'rgba(255,255,255,0.1)', borderRadius: '100px', overflow: 'hidden' }}>
-                                    <div style={{ width: `${(shards.filter(s => s).length / 5) * 100}%`, height: '100%', background: 'linear-gradient(90deg, #667eea, #764ba2, #ec4899)', borderRadius: '100px', transition: 'width 0.5s ease' }}></div>
-                                </div>
-                            </div>
-
-                            {shards.every(s => s) && (
-                                <div style={{ textAlign: 'center' }}>
-                                    <button onClick={assembleGenesis} disabled={loading} className="glow-button" style={{ padding: '24px 48px', fontSize: '1.4rem', background: 'linear-gradient(135deg, #f59e0b, #ef4444, #ec4899)' }}>
-                                        🏆 MINT GENESIS PRIME
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    )}
 
                     {/* x402 Demo Tab */}
                     {activeTab === 'x402' && (
@@ -512,6 +399,80 @@ export default function Home() {
                         </div>
                     )}
 
+                    {/* Easter Egg Hunt Tab */}
+                    {activeTab === 'hunt' && (
+                        <div className="glass" style={{ padding: '32px' }}>
+                            <h2 style={{ fontFamily: 'Fredoka, sans-serif', fontSize: '1.5rem', marginBottom: '8px', textAlign: 'center' }}>
+                                🔮 Collect 5 Shards
+                            </h2>
+                            <p style={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginBottom: '24px' }}>
+                                Each shard requires x402 payment to collect!
+                            </p>
+
+                            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '24px' }}>
+                                {[1, 2, 3, 4, 5].map((level) => (
+                                    <button
+                                        key={level}
+                                        onClick={() => callX402Api(`/api/premium/shard/${level}`)}
+                                        disabled={loading || shards[level - 1]}
+                                        className={`shard-btn ${shards[level - 1] ? 'collected' : ''}`}
+                                    >
+                                        {shards[level - 1] ? '✅' : shardNames[level - 1]}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Progress Bar */}
+                            <div style={{ marginBottom: '24px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontFamily: 'Fredoka, sans-serif' }}>
+                                    <span>Progress</span>
+                                    <span>{shards.filter(s => s).length}/5</span>
+                                </div>
+                                <div style={{ height: '12px', background: 'rgba(255,255,255,0.1)', borderRadius: '100px', overflow: 'hidden' }}>
+                                    <div style={{ width: `${(shards.filter(s => s).length / 5) * 100}%`, height: '100%', background: 'linear-gradient(90deg, #667eea, #764ba2, #ec4899)', borderRadius: '100px', transition: 'width 0.5s ease' }}></div>
+                                </div>
+                            </div>
+
+                            {shards.every(s => s) && (
+                                <div style={{ textAlign: 'center' }}>
+                                    <button disabled={loading} className="glow-button" style={{ padding: '24px 48px', fontSize: '1.4rem', background: 'linear-gradient(135deg, #f59e0b, #ef4444, #ec4899)' }}>
+                                        🏆 MINT GENESIS PRIME
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* About Tab */}
+                    {activeTab === 'register' && (
+                        <div className="glass" style={{ padding: '32px' }}>
+                            <h2 style={{ fontFamily: 'Fredoka, sans-serif', fontSize: '1.5rem', marginBottom: '24px', textAlign: 'center' }}>
+                                🤖 Project Sentience
+                            </h2>
+                            <div style={{ color: 'rgba(255,255,255,0.7)', lineHeight: 1.8 }}>
+                                <p style={{ marginBottom: '16px' }}>
+                                    <strong>What we built:</strong> An identity and reputation protocol for AI agents using the x402 payment standard on Aptos.
+                                </p>
+                                <p style={{ marginBottom: '16px' }}>
+                                    <strong>x402 Protocol:</strong> Enables machine-to-machine payments through HTTP 402 responses. APIs can require payment, and agents automatically pay to access data.
+                                </p>
+                                <p style={{ marginBottom: '16px' }}>
+                                    <strong>Smart Contracts:</strong> Deployed on Aptos testnet with identity registration, reputation scoring, and NFT minting.
+                                </p>
+                                <div style={{ textAlign: 'center', marginTop: '24px' }}>
+                                    <a
+                                        href={`https://explorer.aptoslabs.com/account/${MODULE_ADDRESS}?network=testnet`}
+                                        target="_blank"
+                                        className="glow-button"
+                                        style={{ display: 'inline-block', textDecoration: 'none' }}
+                                    >
+                                        View Contracts on Explorer →
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Footer */}
                     <div style={{ textAlign: 'center', marginTop: '40px', paddingBottom: '40px', color: 'rgba(255,255,255,0.4)' }}>
                         <p style={{ marginBottom: '8px' }}>
@@ -537,20 +498,9 @@ export default function Home() {
                         alignItems: 'center',
                         justifyContent: 'center',
                         zIndex: 1000,
-                        animation: 'fadeIn 0.5s ease'
                     }}>
-                        <style>{`
-                            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-                            @keyframes bounce {
-                                0%, 100% { transform: scale(1); }
-                                50% { transform: scale(1.1); }
-                            }
-                        `}</style>
-
                         <div style={{ textAlign: 'center', zIndex: 1001 }}>
-                            <div style={{ fontSize: '6rem', marginBottom: '24px', animation: 'bounce 1s infinite' }}>
-                                🏆
-                            </div>
+                            <div style={{ fontSize: '6rem', marginBottom: '24px' }}>🏆</div>
                             <h1 style={{
                                 fontFamily: 'Fredoka, sans-serif',
                                 fontSize: 'clamp(2rem, 6vw, 3.5rem)',
@@ -561,12 +511,6 @@ export default function Home() {
                             }}>
                                 GENESIS PRIME UNLOCKED!
                             </h1>
-                            <p style={{ fontSize: '1.2rem', color: 'rgba(255,255,255,0.7)', marginBottom: '8px' }}>
-                                You found all 5 shards and assembled the Genesis NFT!
-                            </p>
-                            <p style={{ fontSize: '1rem', color: 'rgba(255,255,255,0.5)', marginBottom: '32px' }}>
-                                🧠 Welcome to Project Sentience
-                            </p>
                             <button
                                 onClick={() => setShowCelebration(false)}
                                 className="glow-button"
