@@ -14,6 +14,8 @@
         "@rvk_rishikesh/core": "^2.2.0",
         "@rvk_rishikesh/fetch": "^2.2.0",
         "@rvk_rishikesh/next": "^2.2.1",
+        "@telegram-apps/bridge": "^2.11.0",
+        "aptos": "^1.22.1",
         "got": "^14.6.6",
         "next": "16.1.1",
         "petra-plugin-wallet-adapter": "^0.4.5",
