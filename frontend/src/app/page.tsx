@@ -1,38 +1,65 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useWallet } from '@aptos-labs/wallet-adapter-react';
-import { Aptos, AptosConfig, Network } from '@aptos-labs/ts-sdk';
+import React, { useState, useEffect } from 'react';
 
 const MODULE_ADDRESS = '0x0d0b4c628d57f3ffafa1259f1403595c1c07d0e7a0995018fd59e72d1aebfc8c';
 
-const config = new AptosConfig({ network: Network.TESTNET });
-const aptos = new Aptos(config);
-
 export default function Home() {
-    const { account, connected, connect, disconnect, signAndSubmitTransaction, wallets } = useWallet();
+    const [walletAddress, setWalletAddress] = useState<string | null>(null);
     const [status, setStatus] = useState('');
     const [agentName, setAgentName] = useState('');
     const [agentDesc, setAgentDesc] = useState('');
     const [agentEndpoint, setAgentEndpoint] = useState('');
     const [shards, setShards] = useState<boolean[]>([false, false, false, false, false]);
     const [loading, setLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState<'register' | 'hunt'>('register');
+    const [activeTab, setActiveTab] = useState<'register' | 'hunt' | 'x402'>('register');
     const [showCelebration, setShowCelebration] = useState(false);
-    const [showWalletList, setShowWalletList] = useState(false);
+    const [x402Response, setX402Response] = useState<any>(null);
+    const [x402Loading, setX402Loading] = useState(false);
 
-    const connectWallet = async (walletName: string) => {
+    useEffect(() => {
+        checkConnection();
+    }, []);
+
+    const checkConnection = async () => {
+        if (typeof window !== 'undefined' && window.aptos) {
+            try {
+                const isConnected = await window.aptos.isConnected();
+                if (isConnected) {
+                    const account = await window.aptos.account();
+                    setWalletAddress(account.address);
+                }
+            } catch (e) {
+                console.log('Not connected');
+            }
+        }
+    };
+
+    const connectWallet = async () => {
+        if (typeof window === 'undefined' || !window.aptos) {
+            setStatus('❌ Please install Petra wallet!');
+            window.open('https://petra.app', '_blank');
+            return;
+        }
         try {
-            await connect(walletName);
+            const response = await window.aptos.connect();
+            setWalletAddress(response.address);
             setStatus('✅ Wallet connected!');
-            setShowWalletList(false);
         } catch (e: any) {
             setStatus('❌ ' + e.message);
         }
     };
 
+    const disconnectWallet = async () => {
+        if (window.aptos) {
+            await window.aptos.disconnect();
+            setWalletAddress(null);
+            setStatus('Disconnected');
+        }
+    };
+
     const registerAgent = async () => {
-        if (!connected || !account) {
+        if (!walletAddress || !window.aptos) {
             setStatus('Connect wallet first!');
             return;
         }
@@ -40,15 +67,12 @@ export default function Home() {
         setStatus('🔄 Registering agent on-chain...');
 
         try {
-            const response = await signAndSubmitTransaction({
-                sender: account.address,
-                data: {
-                    function: `${MODULE_ADDRESS}::identity::register_agent`,
-                    functionArguments: [agentName, agentDesc, agentEndpoint, false]
-                }
+            const response = await window.aptos.signAndSubmitTransaction({
+                type: 'entry_function_payload',
+                function: `${MODULE_ADDRESS}::identity::register_agent`,
+                type_arguments: [],
+                arguments: [agentName, agentDesc, agentEndpoint, false]
             });
-
-            await aptos.waitForTransaction({ transactionHash: response.hash });
             setStatus(`✅ Agent registered! TX: ${response.hash.slice(0, 10)}...`);
         } catch (e: any) {
             setStatus('❌ ' + e.message);
@@ -57,7 +81,7 @@ export default function Home() {
     };
 
     const collectShard = async (level: number) => {
-        if (!connected || !account) {
+        if (!walletAddress || !window.aptos) {
             setStatus('Connect wallet first!');
             return;
         }
@@ -66,25 +90,21 @@ export default function Home() {
 
         try {
             if (!shards.some(s => s)) {
-                const initResponse = await signAndSubmitTransaction({
-                    sender: account.address,
-                    data: {
-                        function: `${MODULE_ADDRESS}::genesis::init_collection`,
-                        functionArguments: []
-                    }
+                await window.aptos.signAndSubmitTransaction({
+                    type: 'entry_function_payload',
+                    function: `${MODULE_ADDRESS}::genesis::init_collection`,
+                    type_arguments: [],
+                    arguments: []
                 });
-                await aptos.waitForTransaction({ transactionHash: initResponse.hash });
             }
 
-            const response = await signAndSubmitTransaction({
-                sender: account.address,
-                data: {
-                    function: `${MODULE_ADDRESS}::genesis::collect_shard`,
-                    functionArguments: [level]
-                }
+            const response = await window.aptos.signAndSubmitTransaction({
+                type: 'entry_function_payload',
+                function: `${MODULE_ADDRESS}::genesis::collect_shard`,
+                type_arguments: [],
+                arguments: [level]
             });
 
-            await aptos.waitForTransaction({ transactionHash: response.hash });
             const newShards = [...shards];
             newShards[level - 1] = true;
             setShards(newShards);
@@ -100,7 +120,7 @@ export default function Home() {
             setStatus('Collect all 5 shards first!');
             return;
         }
-        if (!connected || !account) {
+        if (!walletAddress || !window.aptos) {
             setStatus('Connect wallet first!');
             return;
         }
@@ -108,21 +128,58 @@ export default function Home() {
         setStatus('🌟 Assembling Genesis Prime NFT...');
 
         try {
-            const response = await signAndSubmitTransaction({
-                sender: account.address,
-                data: {
-                    function: `${MODULE_ADDRESS}::genesis::assemble`,
-                    functionArguments: []
-                }
+            const response = await window.aptos.signAndSubmitTransaction({
+                type: 'entry_function_payload',
+                function: `${MODULE_ADDRESS}::genesis::assemble`,
+                type_arguments: [],
+                arguments: []
             });
-
-            await aptos.waitForTransaction({ transactionHash: response.hash });
             setStatus(`🏆 GENESIS PRIME NFT MINTED! TX: ${response.hash.slice(0, 10)}...`);
             setShowCelebration(true);
         } catch (e: any) {
             setStatus('❌ ' + e.message);
         }
         setLoading(false);
+    };
+
+    // x402 Demo: Call premium API
+    const callX402Api = async (endpoint: string) => {
+        setX402Loading(true);
+        setX402Response(null);
+        setStatus(`💳 Calling x402 API: ${endpoint}...`);
+
+        try {
+            const response = await fetch(endpoint);
+
+            if (response.status === 402) {
+                const paymentRequired = response.headers.get('x-payment');
+                const paymentRequiredAlt = response.headers.get('payment-required');
+                setX402Response({
+                    status: 402,
+                    message: 'Payment Required!',
+                    paymentInfo: paymentRequired || paymentRequiredAlt || 'x402 payment needed',
+                    headers: Object.fromEntries(response.headers.entries())
+                });
+                setStatus('💰 402 Payment Required - x402 protocol working!');
+            } else if (response.ok) {
+                const data = await response.json();
+                setX402Response({
+                    status: 200,
+                    message: 'Success!',
+                    data
+                });
+                setStatus('✅ API call successful!');
+            } else {
+                setX402Response({
+                    status: response.status,
+                    message: response.statusText
+                });
+            }
+        } catch (e: any) {
+            setStatus('❌ ' + e.message);
+            setX402Response({ error: e.message });
+        }
+        setX402Loading(false);
     };
 
     const shardNames = ['Observer 👁️', 'Sybil 🎭', 'Ghost 👻', 'Mirror 🪞', 'Void 🌀'];
@@ -229,21 +286,6 @@ export default function Home() {
                 }
                 
                 .tab-btn.active { background: rgba(255, 255, 255, 0.1); color: white; }
-                
-                .wallet-option {
-                    padding: 16px;
-                    border-radius: 12px;
-                    border: 1px solid rgba(255, 255, 255, 0.1);
-                    background: rgba(255, 255, 255, 0.05);
-                    color: white;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                    display: flex;
-                    align-items: center;
-                    gap: 12px;
-                }
-                
-                .wallet-option:hover { background: rgba(255, 255, 255, 0.1); border-color: #667eea; }
             `}</style>
 
             <div style={{ minHeight: '100vh', color: 'white', position: 'relative', padding: '20px' }}>
@@ -276,7 +318,7 @@ export default function Home() {
 
                     {/* Wallet Card */}
                     <div className="glass" style={{ padding: '24px', marginBottom: '24px', textAlign: 'center' }}>
-                        {connected && account ? (
+                        {walletAddress ? (
                             <div>
                                 <div style={{
                                     display: 'inline-block',
@@ -290,10 +332,10 @@ export default function Home() {
                                     ✅ Connected
                                 </div>
                                 <p style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)' }}>
-                                    {String(account.address).slice(0, 10)}...{String(account.address).slice(-8)}
+                                    {walletAddress.slice(0, 10)}...{walletAddress.slice(-8)}
                                 </p>
                                 <button
-                                    onClick={disconnect}
+                                    onClick={disconnectWallet}
                                     style={{
                                         marginTop: '12px',
                                         padding: '8px 16px',
@@ -307,36 +349,9 @@ export default function Home() {
                                     Disconnect
                                 </button>
                             </div>
-                        ) : showWalletList ? (
-                            <div>
-                                <p style={{ marginBottom: '16px', fontFamily: 'Fredoka, sans-serif' }}>Select a Wallet:</p>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    {wallets?.filter(w => w.readyState === 'Installed').map((wallet) => (
-                                        <button
-                                            key={wallet.name}
-                                            className="wallet-option"
-                                            onClick={() => connectWallet(wallet.name)}
-                                        >
-                                            {wallet.icon && <img src={wallet.icon} alt="" style={{ width: 24, height: 24 }} />}
-                                            {wallet.name}
-                                        </button>
-                                    ))}
-                                    {wallets?.filter(w => w.readyState === 'Installed').length === 0 && (
-                                        <p style={{ color: 'rgba(255,255,255,0.5)' }}>
-                                            No wallets installed. <a href="https://petra.app" target="_blank" style={{ color: '#667eea' }}>Install Petra</a>
-                                        </p>
-                                    )}
-                                </div>
-                                <button
-                                    onClick={() => setShowWalletList(false)}
-                                    style={{ marginTop: '12px', color: 'rgba(255,255,255,0.5)', background: 'none', border: 'none', cursor: 'pointer' }}
-                                >
-                                    Cancel
-                                </button>
-                            </div>
                         ) : (
-                            <button onClick={() => setShowWalletList(true)} className="glow-button" style={{ width: '100%' }}>
-                                🔗 Connect Wallet
+                            <button onClick={connectWallet} className="glow-button" style={{ width: '100%' }}>
+                                🔗 Connect Petra Wallet
                             </button>
                         )}
                     </div>
@@ -349,12 +364,15 @@ export default function Home() {
                     )}
 
                     {/* Tabs */}
-                    <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', justifyContent: 'center' }}>
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', justifyContent: 'center', flexWrap: 'wrap' }}>
                         <button className={`tab-btn ${activeTab === 'register' ? 'active' : ''}`} onClick={() => setActiveTab('register')}>
                             🤖 Register Agent
                         </button>
                         <button className={`tab-btn ${activeTab === 'hunt' ? 'active' : ''}`} onClick={() => setActiveTab('hunt')}>
                             🔮 Easter Egg Hunt
+                        </button>
+                        <button className={`tab-btn ${activeTab === 'x402' ? 'active' : ''}`} onClick={() => setActiveTab('x402')}>
+                            💳 x402 Demo
                         </button>
                     </div>
 
@@ -368,7 +386,7 @@ export default function Home() {
                                 <input type="text" placeholder="Agent Name" value={agentName} onChange={(e) => setAgentName(e.target.value)} className="input-field" />
                                 <input type="text" placeholder="Description" value={agentDesc} onChange={(e) => setAgentDesc(e.target.value)} className="input-field" />
                                 <input type="text" placeholder="Endpoint URL" value={agentEndpoint} onChange={(e) => setAgentEndpoint(e.target.value)} className="input-field" />
-                                <button onClick={registerAgent} disabled={loading || !connected} className="glow-button" style={{ marginTop: '8px' }}>
+                                <button onClick={registerAgent} disabled={loading || !walletAddress} className="glow-button" style={{ marginTop: '8px' }}>
                                     {loading ? '⏳ Processing...' : '📝 Register On-Chain'}
                                 </button>
                             </div>
@@ -414,6 +432,86 @@ export default function Home() {
                         </div>
                     )}
 
+                    {/* x402 Demo Tab */}
+                    {activeTab === 'x402' && (
+                        <div className="glass" style={{ padding: '32px' }}>
+                            <h2 style={{ fontFamily: 'Fredoka, sans-serif', fontSize: '1.5rem', marginBottom: '8px', textAlign: 'center' }}>
+                                💳 x402 Payment Protocol Demo
+                            </h2>
+                            <p style={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginBottom: '24px', fontSize: '0.9rem' }}>
+                                Watch APIs return 402 Payment Required before granting access
+                            </p>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
+                                <button
+                                    onClick={() => callX402Api('/api/premium/agents')}
+                                    disabled={x402Loading}
+                                    className="glow-button"
+                                    style={{ width: '100%' }}
+                                >
+                                    {x402Loading ? '⏳ Loading...' : '🤖 Call Premium Agents API ($0.01)'}
+                                </button>
+                                <button
+                                    onClick={() => callX402Api('/api/premium/shard/1')}
+                                    disabled={x402Loading}
+                                    className="glow-button"
+                                    style={{ width: '100%', background: 'linear-gradient(135deg, #10b981, #059669)' }}
+                                >
+                                    {x402Loading ? '⏳ Loading...' : '👁️ Call Shard 1 API ($0.01)'}
+                                </button>
+                                <button
+                                    onClick={() => callX402Api('/api/premium/shard/5')}
+                                    disabled={x402Loading}
+                                    className="glow-button"
+                                    style={{ width: '100%', background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}
+                                >
+                                    {x402Loading ? '⏳ Loading...' : '🌀 Call Shard 5 API ($0.10)'}
+                                </button>
+                            </div>
+
+                            {x402Response && (
+                                <div style={{
+                                    background: 'rgba(0,0,0,0.3)',
+                                    borderRadius: '12px',
+                                    padding: '16px',
+                                    fontFamily: 'monospace',
+                                    fontSize: '0.85rem'
+                                }}>
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        marginBottom: '12px',
+                                        color: x402Response.status === 402 ? '#fbbf24' : x402Response.status === 200 ? '#10b981' : '#ef4444'
+                                    }}>
+                                        <span style={{ fontSize: '1.5rem' }}>
+                                            {x402Response.status === 402 ? '💰' : x402Response.status === 200 ? '✅' : '❌'}
+                                        </span>
+                                        <span style={{ fontWeight: 'bold' }}>
+                                            HTTP {x402Response.status} - {x402Response.message}
+                                        </span>
+                                    </div>
+                                    <pre style={{
+                                        overflow: 'auto',
+                                        maxHeight: '200px',
+                                        color: 'rgba(255,255,255,0.7)',
+                                        whiteSpace: 'pre-wrap',
+                                        wordBreak: 'break-all'
+                                    }}>
+                                        {JSON.stringify(x402Response, null, 2)}
+                                    </pre>
+                                </div>
+                            )}
+
+                            <div style={{ marginTop: '24px', padding: '16px', background: 'rgba(102, 126, 234, 0.1)', borderRadius: '12px', border: '1px solid rgba(102, 126, 234, 0.2)' }}>
+                                <p style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.7)', textAlign: 'center' }}>
+                                    🔮 <strong>How it works:</strong> APIs return 402 Payment Required.
+                                    The x402 client automatically signs payment and retries!
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Footer */}
                     <div style={{ textAlign: 'center', marginTop: '40px', paddingBottom: '40px', color: 'rgba(255,255,255,0.4)' }}>
                         <p style={{ marginBottom: '8px' }}>
@@ -443,36 +541,11 @@ export default function Home() {
                     }}>
                         <style>{`
                             @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-                            @keyframes confetti {
-                                0% { transform: translateY(-100vh) rotate(0deg); opacity: 1; }
-                                100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
-                            }
                             @keyframes bounce {
                                 0%, 100% { transform: scale(1); }
                                 50% { transform: scale(1.1); }
                             }
-                            .confetti {
-                                position: fixed;
-                                width: 10px;
-                                height: 10px;
-                                animation: confetti 3s ease-out forwards;
-                            }
                         `}</style>
-
-                        {/* Confetti particles */}
-                        {[...Array(50)].map((_, i) => (
-                            <div
-                                key={i}
-                                className="confetti"
-                                style={{
-                                    left: `${Math.random() * 100}%`,
-                                    top: '-10px',
-                                    background: ['#ff6b6b', '#4ecdc4', '#a855f7', '#fbbf24', '#ec4899', '#10b981'][i % 6],
-                                    borderRadius: i % 2 === 0 ? '50%' : '0',
-                                    animationDelay: `${Math.random() * 2}s`
-                                }}
-                            />
-                        ))}
 
                         <div style={{ textAlign: 'center', zIndex: 1001 }}>
                             <div style={{ fontSize: '6rem', marginBottom: '24px', animation: 'bounce 1s infinite' }}>

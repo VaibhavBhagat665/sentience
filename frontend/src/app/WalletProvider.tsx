@@ -1,21 +1,20 @@
 'use client';
 
-import { AptosWalletAdapterProvider } from '@aptos-labs/wallet-adapter-react';
-import { Network } from '@aptos-labs/ts-sdk';
 import { PropsWithChildren } from 'react';
 
+// Window.aptos typing
+declare global {
+    interface Window {
+        aptos?: {
+            connect: () => Promise<{ address: string }>;
+            disconnect: () => Promise<void>;
+            account: () => Promise<{ address: string }>;
+            signAndSubmitTransaction: (payload: any) => Promise<{ hash: string }>;
+            isConnected: () => Promise<boolean>;
+        };
+    }
+}
+
 export function WalletProvider({ children }: PropsWithChildren) {
-    return (
-        <AptosWalletAdapterProvider
-            autoConnect={true}
-            dappConfig={{
-                network: Network.TESTNET,
-            }}
-            onError={(error) => {
-                console.log('Wallet error:', error);
-            }}
-        >
-            {children}
-        </AptosWalletAdapterProvider>
-    );
+    return <>{children}</>;
 }
