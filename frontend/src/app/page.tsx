@@ -42,7 +42,7 @@ export default function Home() {
             const pubKey = Array.isArray(account.publicKey) ? account.publicKey[0] : account.publicKey;
 
             // Initialize x402 with BrowserSigner
-            const browserSigner = new BrowserSigner(account.address, pubKey, signTransaction);
+            const browserSigner = new BrowserSigner(account.address.toString(), pubKey, signTransaction);
 
             // We cast to Account because x402 SDK expects Account type but only uses signTransaction
             const mockAccount = browserSigner as unknown as Account;
