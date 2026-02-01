@@ -23,8 +23,8 @@ const PAYMENT_RECIPIENT = process.env.PAYMENT_RECIPIENT_ADDRESS || '0x0d0b4c628d
 const FACILITATOR_URL = process.env.FACILITATOR_URL || 'https://x402-navy.vercel.app/facilitator';
 const MODULE_ADDRESS = process.env.MODULE_ADDRESS || '0x0d0b4c628d57f3ffafa1259f1403595c1c07d0e7a0995018fd59e72d1aebfc8c';
 
-// Testnet APT (0xa) - Using native APT ensures users can pay via Faucet
-const USDC_ASSET = '0xa';
+// Testnet APT Coin (Standard Struct)
+const USDC_ASSET = '0x1::aptos_coin::AptosCoin';
 
 // Price tiers (in USDC units, 6 decimals)
 // Price tiers (in Octas, 8 decimals) - kept very low for testing
@@ -51,7 +51,7 @@ function createPaymentRequired(price: string, description: string) {
         outputSchema: null,
         extra: {
             name: 'Project Sentience',
-            sponsored: true  // Facilitator pays gas
+            sponsored: false  // Facilitator pays gas disabled for simple Coin transfer
         }
     };
     return Buffer.from(JSON.stringify(payload)).toString('base64');

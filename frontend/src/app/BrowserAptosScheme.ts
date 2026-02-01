@@ -50,18 +50,37 @@ export class BrowserAptosScheme implements SchemeNetworkClient {
 
         const sponsored = paymentRequirements.extra?.sponsored === true;
 
-        // Build Transaction
-        const transaction = await aptos.transaction.build.simple({
-            sender: this.address,
-            data: {
+        // Check if asset is a Coin Struct (contains '::') or FA Address
+        const isCoin = paymentRequirements.asset.includes('::');
+
+        let transactionData: any;
+
+        if (isCoin) {
+            // Use 0x1::coin::transfer
+            transactionData = {
+                function: "0x1::coin::transfer",
+                typeArguments: [paymentRequirements.asset],
+                functionArguments: [
+                    paymentRequirements.payTo,
+                    paymentRequirements.amount,
+                ]
+            };
+        } else {
+            // Use FA transfer
+            transactionData = {
                 function: "0x1::primary_fungible_store::transfer",
                 typeArguments: ["0x1::fungible_asset::Metadata"],
                 functionArguments: [
                     paymentRequirements.asset,
                     paymentRequirements.payTo,
                     paymentRequirements.amount,
-                ],
-            },
+                ]
+            };
+        }
+
+        const transaction = await aptos.transaction.build.simple({
+            sender: this.address,
+            data: transactionData,
             withFeePayer: sponsored,
         });
 
