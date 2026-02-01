@@ -6,6 +6,7 @@ import { BrowserAptosScheme } from './BrowserAptosScheme';
 import { useWallet } from '@aptos-labs/wallet-adapter-react';
 
 const MODULE_ADDRESS = '0x0d0b4c628d57f3ffafa1259f1403595c1c07d0e7a0995018fd59e72d1aebfc8c';
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://sentience-m4pz.onrender.com';
 
 export default function Home() {
     const { connect, disconnect, account, connected, signTransaction, wallets } = useWallet();
@@ -133,7 +134,7 @@ export default function Home() {
         }
 
         // Use x402 to "collect" (pay for) the shard
-        const success = await callX402Api(`/api/premium/shard/${level}`);
+        const success = await callX402Api(`${BACKEND_URL}/shard/level/${level}`);
 
         if (success) {
             const newShards = [...shards];
@@ -349,20 +350,20 @@ export default function Home() {
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
                                 <button
-                                    onClick={() => callX402Api('/api/premium/agents')}
+                                    onClick={() => callX402Api(`${BACKEND_URL}/service/data`)}
                                     disabled={x402Loading}
                                     className="glow-button"
                                     style={{ width: '100%' }}
                                 >
-                                    {x402Loading ? '⏳ Paid Request in progress...' : (connected ? '🤖 Call Premium Agents API ($0.01)' : '🤖 Call API (Will return 402)')}
+                                    {x402Loading ? '⏳ Paid Request in progress...' : (connected ? '🤖 Call Premium Agents API (1 Octa)' : '🤖 Call API (Will return 402)')}
                                 </button>
                                 <button
-                                    onClick={() => callX402Api('/api/premium/shard/1')}
+                                    onClick={() => callX402Api(`${BACKEND_URL}/shard/level/1`)}
                                     disabled={x402Loading}
                                     className="glow-button"
                                     style={{ width: '100%', background: 'linear-gradient(135deg, #10b981, #059669)' }}
                                 >
-                                    {x402Loading ? '⏳ Collected...' : '👁️ Call Shard 1 API ($0.01)'}
+                                    {x402Loading ? '⏳ Collected...' : '👁️ Call Shard 1 API (1 Octa)'}
                                 </button>
                             </div>
 
