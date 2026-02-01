@@ -14,7 +14,9 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const app = express();
-app.use(cors());
+app.use(cors({
+    exposedHeaders: ['Payment-Required', 'X-Payment-Required', 'Payment-Response', 'X-Payment-Response', 'WWW-Authenticate']
+}));
 app.use(express.json());
 
 // Configuration
