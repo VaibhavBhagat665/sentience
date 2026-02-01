@@ -63,6 +63,7 @@ async function processPayment(paymentSignature: string, paymentRequired: string)
     try {
         // Decode the payment signature
         const payload = JSON.parse(Buffer.from(paymentSignature, 'base64').toString());
+        console.log(`[x402] Verifying payment from ${payload.sender || 'unknown'}...`);
 
         // Call facilitator /verify
         const verifyRes = await fetch(`${FACILITATOR_URL}/verify`, {
@@ -95,7 +96,9 @@ async function processPayment(paymentSignature: string, paymentRequired: string)
         }
 
         const result = await settleRes.json() as { txHash?: string; hash?: string };
-        return { success: true, txHash: result.txHash || result.hash || 'completed' };
+        const tx = result.txHash || result.hash || 'completed';
+        console.log(`[x402] Payment SETTLED via Facilitator. Tx: ${tx}`);
+        return { success: true, txHash: tx };
 
     } catch (error: any) {
         return { success: false, error: error.message };
@@ -140,6 +143,7 @@ function x402Middleware(price: string, description: string) {
 
         // Attach payment info to request
         (req as any).payment = { txHash: result.txHash };
+        console.log(`[Server] Access Granted: ${description}`);
         next();
     };
 }
