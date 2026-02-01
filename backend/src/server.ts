@@ -39,20 +39,26 @@ const PRICES = {
  */
 function createPaymentRequired(price: string, description: string) {
     const payload = {
-        version: '1',
-        network: 'aptos:2', // 2 = testnet
-        asset: USDC_ASSET,
-        payee: PAYMENT_RECIPIENT,
-        maxAmount: price,
-        description,
-        resource: '',
-        scheme: 'exact',
-        mimeType: 'application/json',
-        outputSchema: null,
-        extra: {
-            name: 'Project Sentience',
-            sponsored: false  // Facilitator pays gas disabled for simple Coin transfer
-        }
+        x402Version: 2,
+        resource: {
+            url: '',
+            description: description,
+            mimeType: 'application/json'
+        },
+        accepts: [
+            {
+                scheme: 'exact',
+                network: 'aptos:2',
+                asset: USDC_ASSET,
+                amount: price,
+                payTo: PAYMENT_RECIPIENT,
+                maxTimeoutSeconds: 300,
+                extra: {
+                    name: 'Project Sentience',
+                    sponsored: false
+                }
+            }
+        ]
     };
     return Buffer.from(JSON.stringify(payload)).toString('base64');
 }
