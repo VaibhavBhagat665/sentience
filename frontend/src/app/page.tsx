@@ -1,66 +1,119 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Account, Ed25519PrivateKey } from '@aptos-labs/ts-sdk';
+import { Account } from '@aptos-labs/ts-sdk';
 import { x402Client, wrapFetchWithPayment } from '@rvk_rishikesh/fetch';
 import { registerExactAptosScheme } from '@rvk_rishikesh/aptos/exact/client';
+import { BrowserSigner } from './BrowserSigner';
 
 const MODULE_ADDRESS = '0x0d0b4c628d57f3ffafa1259f1403595c1c07d0e7a0995018fd59e72d1aebfc8c';
-
-// Demo private key for testing (in production, use wallet connection)
-const DEMO_PRIVATE_KEY = process.env.NEXT_PUBLIC_PRIVATE_KEY;
 
 export default function Home() {
     const [walletAddress, setWalletAddress] = useState<string | null>(null);
     const [status, setStatus] = useState('');
-    const [agentName, setAgentName] = useState('');
-    const [agentDesc, setAgentDesc] = useState('');
-    const [agentEndpoint, setAgentEndpoint] = useState('');
-    const [shards, setShards] = useState<boolean[]>([false, false, false, false, false]);
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<'register' | 'hunt' | 'x402'>('x402');
     const [showCelebration, setShowCelebration] = useState(false);
+
+    // x402 State
     const [x402Response, setX402Response] = useState<any>(null);
     const [x402Loading, setX402Loading] = useState(false);
     const [fetchWithPayment, setFetchWithPayment] = useState<any>(null);
 
+    // Game State
+    const [shards, setShards] = useState<boolean[]>([false, false, false, false, false]);
+    const shardNames = ['Observer 👁️', 'Sybil 🎭', 'Ghost 👻', 'Mirror 🪞', 'Void 🌀'];
+
     useEffect(() => {
-        // Initialize x402 client with Aptos account
-        if (DEMO_PRIVATE_KEY) {
-            try {
-                const privateKeyHex = DEMO_PRIVATE_KEY.startsWith('0x')
-                    ? DEMO_PRIVATE_KEY.slice(2)
-                    : DEMO_PRIVATE_KEY;
-
-                const privateKey = new Ed25519PrivateKey(privateKeyHex);
-                const aptosAccount = Account.fromPrivateKey({ privateKey });
-
-                const x402client = new x402Client();
-                registerExactAptosScheme(x402client, { signer: aptosAccount });
-                const wrappedFetch = wrapFetchWithPayment(fetch, x402client);
-
-                setWalletAddress(aptosAccount.accountAddress.toString());
-                setFetchWithPayment(() => wrappedFetch);
-                setStatus('✅ x402 Client initialized!');
-            } catch (err: any) {
-                setStatus('⚠️ Demo mode - add NEXT_PUBLIC_PRIVATE_KEY for auto-pay');
-            }
-        } else {
-            setStatus('⚠️ Demo mode - add NEXT_PUBLIC_PRIVATE_KEY for auto-pay');
-        }
+        checkConnection();
     }, []);
+
+    const checkConnection = async () => {
+        if (typeof window !== 'undefined' && (window as any).aptos) {
+            try {
+                if (await (window as any).aptos.isConnected()) {
+                    await connectWallet();
+                }
+            } catch (e) {
+                console.log('Not connected');
+            }
+        }
+    };
+
+    const connectWallet = async () => {
+        if (typeof window === 'undefined' || !(window as any).aptos) {
+            setStatus('❌ Please install Petra wallet!');
+            window.open('https://petra.app', '_blank');
+            return;
+        }
+
+        try {
+            const aptos = (window as any).aptos;
+            const response = await aptos.connect();
+            const accountInfo = await aptos.account();
+
+            if (!accountInfo.publicKey) {
+                throw new Error("Could not retrieve public key from wallet");
+            }
+
+            const address = response.address || accountInfo.address;
+            setWalletAddress(address);
+
+            // Initialize x402 with BrowserSigner
+            const browserSigner = new BrowserSigner(address, accountInfo.publicKey);
+
+            // We cast to Account because x402 SDK expects Account type but only uses signTransaction
+            const mockAccount = browserSigner as unknown as Account;
+
+            const x402client = new x402Client();
+            registerExactAptosScheme(x402client, { signer: mockAccount });
+            const wrappedFetch = wrapFetchWithPayment(fetch, x402client);
+
+            setFetchWithPayment(() => wrappedFetch);
+            setStatus('✅ Wallet Connected & x402 Ready!');
+        } catch (e: any) {
+            console.error(e);
+            setStatus('❌ ' + (e.message || "Connection failed"));
+        }
+    };
+
+    const disconnectWallet = async () => {
+        if ((window as any).aptos) {
+            await (window as any).aptos.disconnect();
+            setWalletAddress(null);
+            setFetchWithPayment(null);
+            setStatus('Disconnected');
+        }
+    };
 
     // x402 Demo: Call premium API
     const callX402Api = async (endpoint: string) => {
+        // If wallet is connected, use wrapped fetch (auto-pay)
+        // If not, use regular fetch (show 402)
+        const doAutoPay = !!fetchWithPayment;
+
         setX402Loading(true);
         setX402Response(null);
-        setStatus(`💳 Calling x402 API: ${endpoint}...`);
+        setStatus(doAutoPay ? `💳 Calling with auto-pay: ${endpoint}...` : `💳 Calling API: ${endpoint}...`);
 
         try {
-            // Use regular fetch first to show 402 response
-            const response = await fetch(endpoint);
+            const fetcher = doAutoPay ? fetchWithPayment : fetch;
+            const response = await fetcher(endpoint, { method: 'GET' });
 
-            if (response.status === 402) {
+            // Handle success
+            if (response.ok) {
+                const data = await response.json();
+                setX402Response({
+                    status: 200,
+                    message: doAutoPay ? 'Success with auto-payment!' : 'Success!',
+                    data,
+                    transactionHash: response.headers.get('payment-response') || (doAutoPay ? 'paid' : null)
+                });
+                setStatus('✅ Request successful!');
+                return true;
+            }
+            // Handle 402
+            else if (response.status === 402) {
                 const paymentRequired = response.headers.get('payment-required');
                 setX402Response({
                     status: 402,
@@ -68,65 +121,53 @@ export default function Home() {
                     paymentInfo: paymentRequired || 'x402 payment needed',
                     headers: Object.fromEntries(response.headers.entries())
                 });
-                setStatus('💰 402 Payment Required - This is how x402 works!');
-            } else if (response.ok) {
-                const data = await response.json();
-                setX402Response({
-                    status: 200,
-                    message: 'Success!',
-                    data
-                });
-                setStatus('✅ API call successful!');
-            } else {
+                setStatus(doAutoPay ? '❌ Auto-pay failed (check balance)' : '💰 402 Payment Required - Connect Wallet to Auto-Pay!');
+            }
+            // Handle other errors
+            else {
                 setX402Response({
                     status: response.status,
                     message: response.statusText
                 });
+                setStatus(`❌ Error: ${response.status}`);
             }
         } catch (e: any) {
             setStatus('❌ ' + e.message);
             setX402Response({ error: e.message });
         }
         setX402Loading(false);
+        return false;
     };
 
-    // Call with auto-payment (using wrapped fetch)
-    const callX402WithPayment = async (endpoint: string) => {
-        if (!fetchWithPayment) {
-            setStatus('⚠️ Set NEXT_PUBLIC_PRIVATE_KEY for auto-pay');
+    const collectShard = async (level: number) => {
+        if (!walletAddress) {
+            setStatus('Connect wallet first!');
             return;
         }
 
-        setX402Loading(true);
-        setX402Response(null);
-        setStatus(`💳 Calling with auto-pay: ${endpoint}...`);
+        // Use x402 to "collect" (pay for) the shard
+        const success = await callX402Api(`/api/premium/shard/${level}`);
 
-        try {
-            const response = await fetchWithPayment(endpoint, { method: 'GET' });
-
-            if (response.ok) {
-                const data = await response.json();
-                setX402Response({
-                    status: 200,
-                    message: 'Success with auto-payment!',
-                    data,
-                    transactionHash: response.headers.get('payment-response') || 'paid'
-                });
-                setStatus('✅ Paid and received data!');
-            } else {
-                setX402Response({
-                    status: response.status,
-                    message: response.statusText
-                });
-            }
-        } catch (e: any) {
-            setStatus('❌ ' + e.message);
-            setX402Response({ error: e.message });
+        if (success) {
+            const newShards = [...shards];
+            newShards[level - 1] = true;
+            setShards(newShards);
+            setStatus(`✨ Shard ${level} collected via x402!`);
         }
-        setX402Loading(false);
     };
 
-    const shardNames = ['Observer 👁️', 'Sybil 🎭', 'Ghost 👻', 'Mirror 🪞', 'Void 🌀'];
+    const assembleGenesis = async () => {
+        if (!shards.every(s => s)) {
+            setStatus('Collect all 5 shards first!');
+            return;
+        }
+        setLoading(true);
+        // Here we would mint the NFT on-chain
+        setTimeout(() => {
+            setShowCelebration(true);
+            setLoading(false);
+        }, 2000);
+    };
 
     return (
         <>
@@ -183,21 +224,6 @@ export default function Home() {
                 
                 .glow-button:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6); }
                 .glow-button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-                
-                .input-field {
-                    width: 100%;
-                    padding: 16px 20px;
-                    border-radius: 16px;
-                    border: 2px solid rgba(255, 255, 255, 0.1);
-                    background: rgba(255, 255, 255, 0.05);
-                    color: white;
-                    font-size: 1rem;
-                    font-family: 'Space Grotesk', sans-serif;
-                    transition: all 0.3s ease;
-                }
-                
-                .input-field:focus { outline: none; border-color: #667eea; box-shadow: 0 0 20px rgba(102, 126, 234, 0.3); }
-                .input-field::placeholder { color: rgba(255, 255, 255, 0.4); }
                 
                 .shard-btn {
                     flex: 1;
@@ -273,29 +299,30 @@ export default function Home() {
                                     fontWeight: 600,
                                     marginBottom: '12px'
                                 }}>
-                                    ✅ x402 Client Ready
+                                    ✅ Connected to Wallet
                                 </div>
                                 <p style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)' }}>
                                     {walletAddress.slice(0, 10)}...{walletAddress.slice(-8)}
                                 </p>
+                                <button
+                                    onClick={disconnectWallet}
+                                    style={{
+                                        marginTop: '12px',
+                                        padding: '8px 16px',
+                                        background: 'rgba(239, 68, 68, 0.2)',
+                                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                                        borderRadius: '8px',
+                                        color: '#ef4444',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Disconnect
+                                </button>
                             </div>
                         ) : (
-                            <div>
-                                <div style={{
-                                    display: 'inline-block',
-                                    padding: '8px 16px',
-                                    background: 'rgba(251, 191, 36, 0.2)',
-                                    borderRadius: '100px',
-                                    color: '#fbbf24',
-                                    fontWeight: 600,
-                                    marginBottom: '12px'
-                                }}>
-                                    ⚠️ Demo Mode
-                                </div>
-                                <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)' }}>
-                                    x402 APIs work without wallet connection
-                                </p>
-                            </div>
+                            <button onClick={connectWallet} className="glow-button" style={{ width: '100%' }}>
+                                🔗 Connect Petra Wallet
+                            </button>
                         )}
                     </div>
 
@@ -326,7 +353,10 @@ export default function Home() {
                                 💳 x402 Payment Protocol Demo
                             </h2>
                             <p style={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginBottom: '24px', fontSize: '0.9rem' }}>
-                                Watch APIs return 402 Payment Required before granting access
+                                {walletAddress
+                                    ? "Click below to make auto-paid requests using your wallet signature!"
+                                    : "Connect wallet to enable automatic x402 payments."
+                                }
                             </p>
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
@@ -336,7 +366,7 @@ export default function Home() {
                                     className="glow-button"
                                     style={{ width: '100%' }}
                                 >
-                                    {x402Loading ? '⏳ Loading...' : '🤖 Call Premium Agents API ($0.01)'}
+                                    {x402Loading ? '⏳ Paid Request in progress...' : (walletAddress ? '🤖 Call Premium Agents API ($0.01)' : '🤖 Call API (Will return 402)')}
                                 </button>
                                 <button
                                     onClick={() => callX402Api('/api/premium/shard/1')}
@@ -344,15 +374,7 @@ export default function Home() {
                                     className="glow-button"
                                     style={{ width: '100%', background: 'linear-gradient(135deg, #10b981, #059669)' }}
                                 >
-                                    {x402Loading ? '⏳ Loading...' : '👁️ Call Shard 1 API ($0.01)'}
-                                </button>
-                                <button
-                                    onClick={() => callX402Api('/api/premium/shard/5')}
-                                    disabled={x402Loading}
-                                    className="glow-button"
-                                    style={{ width: '100%', background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}
-                                >
-                                    {x402Loading ? '⏳ Loading...' : '🌀 Call Shard 5 API ($0.10)'}
+                                    {x402Loading ? '⏳ Collected...' : '👁️ Call Shard 1 API ($0.01)'}
                                 </button>
                             </div>
 
@@ -389,13 +411,6 @@ export default function Home() {
                                     </pre>
                                 </div>
                             )}
-
-                            <div style={{ marginTop: '24px', padding: '16px', background: 'rgba(102, 126, 234, 0.1)', borderRadius: '12px', border: '1px solid rgba(102, 126, 234, 0.2)' }}>
-                                <p style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.7)', textAlign: 'center' }}>
-                                    🔮 <strong>How it works:</strong> APIs return 402 Payment Required.
-                                    The x402 client automatically signs payment and retries!
-                                </p>
-                            </div>
                         </div>
                     )}
 
@@ -406,14 +421,14 @@ export default function Home() {
                                 🔮 Collect 5 Shards
                             </h2>
                             <p style={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginBottom: '24px' }}>
-                                Each shard requires x402 payment to collect!
+                                Each shard requires a real x402 micropayment to collect!
                             </p>
 
                             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '24px' }}>
                                 {[1, 2, 3, 4, 5].map((level) => (
                                     <button
                                         key={level}
-                                        onClick={() => callX402Api(`/api/premium/shard/${level}`)}
+                                        onClick={() => collectShard(level)}
                                         disabled={loading || shards[level - 1]}
                                         className={`shard-btn ${shards[level - 1] ? 'collected' : ''}`}
                                     >
@@ -435,7 +450,7 @@ export default function Home() {
 
                             {shards.every(s => s) && (
                                 <div style={{ textAlign: 'center' }}>
-                                    <button disabled={loading} className="glow-button" style={{ padding: '24px 48px', fontSize: '1.4rem', background: 'linear-gradient(135deg, #f59e0b, #ef4444, #ec4899)' }}>
+                                    <button onClick={assembleGenesis} disabled={loading} className="glow-button" style={{ padding: '24px 48px', fontSize: '1.4rem', background: 'linear-gradient(135deg, #f59e0b, #ef4444, #ec4899)' }}>
                                         🏆 MINT GENESIS PRIME
                                     </button>
                                 </div>
@@ -451,34 +466,16 @@ export default function Home() {
                             </h2>
                             <div style={{ color: 'rgba(255,255,255,0.7)', lineHeight: 1.8 }}>
                                 <p style={{ marginBottom: '16px' }}>
-                                    <strong>What we built:</strong> An identity and reputation protocol for AI agents using the x402 payment standard on Aptos.
+                                    <strong>Real x402 Integration:</strong> This app connects to your Petral wallet.
+                                    When you call an API, it returns 402 Payment Required.
+                                    The app then uses your wallet to sign a payment transaction and resends the request with the proof!
                                 </p>
-                                <p style={{ marginBottom: '16px' }}>
-                                    <strong>x402 Protocol:</strong> Enables machine-to-machine payments through HTTP 402 responses. APIs can require payment, and agents automatically pay to access data.
-                                </p>
-                                <p style={{ marginBottom: '16px' }}>
-                                    <strong>Smart Contracts:</strong> Deployed on Aptos testnet with identity registration, reputation scoring, and NFT minting.
-                                </p>
-                                <div style={{ textAlign: 'center', marginTop: '24px' }}>
-                                    <a
-                                        href={`https://explorer.aptoslabs.com/account/${MODULE_ADDRESS}?network=testnet`}
-                                        target="_blank"
-                                        className="glow-button"
-                                        style={{ display: 'inline-block', textDecoration: 'none' }}
-                                    >
-                                        View Contracts on Explorer →
-                                    </a>
-                                </div>
                             </div>
                         </div>
                     )}
 
                     {/* Footer */}
                     <div style={{ textAlign: 'center', marginTop: '40px', paddingBottom: '40px', color: 'rgba(255,255,255,0.4)' }}>
-                        <p style={{ marginBottom: '8px' }}>
-                            🔮 <span style={{ color: '#a855f7' }}>Easter Egg:</span> Find the Magic Spell in{' '}
-                            <code style={{ background: 'rgba(168, 85, 247, 0.2)', padding: '4px 8px', borderRadius: '6px', color: '#a855f7' }}>reputation.move</code>
-                        </p>
                         <a href={`https://explorer.aptoslabs.com/account/${MODULE_ADDRESS}?network=testnet`} target="_blank" style={{ color: '#667eea', textDecoration: 'none', fontSize: '0.9rem' }}>
                             View Smart Contracts on Explorer →
                         </a>
