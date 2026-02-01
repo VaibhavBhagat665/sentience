@@ -1,5 +1,4 @@
 import {
-    Account,
     AccountAddress,
     AccountAuthenticator,
     AccountAuthenticatorEd25519,
@@ -9,45 +8,50 @@ import {
 } from '@aptos-labs/ts-sdk';
 
 /**
- * A custom signer that delegates signing to the browser wallet (Petra/Martian)
- * mimicing the Account class interface expected by x402 SDK
+ * A custom signer that delegates signing to the Wallet Adapter
+ * mimicking the Account class interface expected by x402 SDK
  */
 export class BrowserSigner {
     readonly accountAddress: AccountAddress;
     readonly publicKey: Ed25519PublicKey;
+    readonly signFn: (transaction: AnyRawTransaction) => Promise<any>;
 
-    constructor(address: string, publicKeyHex: string) {
+    constructor(
+        address: string,
+        publicKeyHex: string,
+        signFn: (transaction: AnyRawTransaction) => Promise<any>
+    ) {
         this.accountAddress = AccountAddress.fromString(address);
         this.publicKey = new Ed25519PublicKey(publicKeyHex);
+        this.signFn = signFn;
     }
 
     /**
-     * Signs a transaction using the browser wallet
+     * Signs a transaction using the injected signing function
      */
     async signTransaction(transaction: AnyRawTransaction): Promise<AccountAuthenticator> {
-        if (typeof window === 'undefined' || !(window as any).aptos) {
-            throw new Error("Wallet not connected");
-        }
-
         try {
-            const aptos = (window as any).aptos;
-
-            // Try the standard signTransaction method
-            // Note: Petra and others might return different formats
-            const response = await aptos.signTransaction(transaction);
+            // Use the injected signing function
+            const response = await this.signFn(transaction);
 
             // Handle response formats
             let signatureHex = '';
 
-            if ('signature' in response && typeof response.signature === 'string') {
-                signatureHex = response.signature;
+            if (response && typeof response === 'object' && 'signature' in response) {
+                // Adapter format: { signature: "0x..." }
+                // @ts-ignore
+                const sig = response.signature;
+                if (typeof sig === 'string') {
+                    signatureHex = sig;
+                } else if (sig instanceof Uint8Array) {
+                    signatureHex = Buffer.from(sig).toString('hex');
+                }
+            } else if (typeof response === 'string') {
+                signatureHex = response;
             } else if (response instanceof Uint8Array) {
                 signatureHex = Buffer.from(response).toString('hex');
-            } else if (response.signature instanceof Uint8Array) {
-                signatureHex = Buffer.from(response.signature).toString('hex');
             } else {
                 console.warn("Unknown signTransaction response:", response);
-                // Fallback attempt?
                 throw new Error("Invalid signature format from wallet");
             }
 

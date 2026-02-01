@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { WalletProvider } from './WalletProvider';
+import { Providers } from './Providers';
 
 export const metadata: Metadata = {
     title: 'Project Sentience | x402 Hackathon',
@@ -14,9 +14,9 @@ export default function RootLayout({
     return (
         <html lang="en">
             <body style={{ margin: 0, padding: 0 }}>
-                <WalletProvider>
+                <Providers>
                     {children}
-                </WalletProvider>
+                </Providers>
             </body>
         </html>
     );

@@ -5,11 +5,12 @@ import { Account } from '@aptos-labs/ts-sdk';
 import { x402Client, wrapFetchWithPayment } from '@rvk_rishikesh/fetch';
 import { registerExactAptosScheme } from '@rvk_rishikesh/aptos/exact/client';
 import { BrowserSigner } from './BrowserSigner';
+import { useWallet } from '@aptos-labs/wallet-adapter-react';
 
 const MODULE_ADDRESS = '0x0d0b4c628d57f3ffafa1259f1403595c1c07d0e7a0995018fd59e72d1aebfc8c';
 
 export default function Home() {
-    const [walletAddress, setWalletAddress] = useState<string | null>(null);
+    const { connect, disconnect, account, connected, signTransaction, wallets } = useWallet();
     const [status, setStatus] = useState('');
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<'register' | 'hunt' | 'x402'>('x402');
@@ -25,42 +26,23 @@ export default function Home() {
     const shardNames = ['Observer 👁️', 'Sybil 🎭', 'Ghost 👻', 'Mirror 🪞', 'Void 🌀'];
 
     useEffect(() => {
-        checkConnection();
-    }, []);
-
-    const checkConnection = async () => {
-        if (typeof window !== 'undefined' && (window as any).aptos) {
-            try {
-                if (await (window as any).aptos.isConnected()) {
-                    await connectWallet();
-                }
-            } catch (e) {
-                console.log('Not connected');
-            }
+        if (connected && account && account.address) {
+            setupX402();
+        } else {
+            setFetchWithPayment(null);
+            setStatus('Please connect wallet');
         }
-    };
+    }, [connected, account]);
 
-    const connectWallet = async () => {
-        if (typeof window === 'undefined' || !(window as any).aptos) {
-            setStatus('❌ Please install Petra wallet!');
-            window.open('https://petra.app', '_blank');
-            return;
-        }
-
+    const setupX402 = async () => {
         try {
-            const aptos = (window as any).aptos;
-            const response = await aptos.connect();
-            const accountInfo = await aptos.account();
+            if (!account || !account.publicKey) return;
 
-            if (!accountInfo.publicKey) {
-                throw new Error("Could not retrieve public key from wallet");
-            }
-
-            const address = response.address || accountInfo.address;
-            setWalletAddress(address);
+            // Handle publicKey being string or array
+            const pubKey = Array.isArray(account.publicKey) ? account.publicKey[0] : account.publicKey;
 
             // Initialize x402 with BrowserSigner
-            const browserSigner = new BrowserSigner(address, accountInfo.publicKey);
+            const browserSigner = new BrowserSigner(account.address, pubKey, signTransaction);
 
             // We cast to Account because x402 SDK expects Account type but only uses signTransaction
             const mockAccount = browserSigner as unknown as Account;
@@ -73,16 +55,18 @@ export default function Home() {
             setStatus('✅ Wallet Connected & x402 Ready!');
         } catch (e: any) {
             console.error(e);
-            setStatus('❌ ' + (e.message || "Connection failed"));
+            setStatus('❌ ' + (e.message || "Setup failed"));
         }
     };
 
-    const disconnectWallet = async () => {
-        if ((window as any).aptos) {
-            await (window as any).aptos.disconnect();
-            setWalletAddress(null);
-            setFetchWithPayment(null);
-            setStatus('Disconnected');
+    const handleConnect = () => {
+        const petra = wallets.find(w => w.name === 'Petra');
+        if (petra) {
+            connect(petra.name);
+        } else if (wallets.length > 0) {
+            connect(wallets[0].name);
+        } else {
+            window.open('https://petra.app', '_blank');
         }
     };
 
@@ -304,20 +288,21 @@ export default function Home() {
                                 <p style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)' }}>
                                     {walletAddress.slice(0, 10)}...{walletAddress.slice(-8)}
                                 </p>
-                                <button
-                                    onClick={disconnectWallet}
-                                    style={{
-                                        marginTop: '12px',
-                                        padding: '8px 16px',
-                                        background: 'rgba(239, 68, 68, 0.2)',
-                                        border: '1px solid rgba(239, 68, 68, 0.3)',
-                                        borderRadius: '8px',
-                                        color: '#ef4444',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    Disconnect
-                                </button>
+                                {!connected ? (
+                                    <button
+                                        onClick={handleConnect}
+                                        className="bg-teal-500 hover:bg-teal-400 text-black font-bold py-2 px-6 rounded-full transition-all transform hover:scale-105"
+                                    >
+                                        🔗 Connect Petra Wallet
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={disconnect}
+                                        className="bg-red-500 hover:bg-red-400 text-white font-bold py-2 px-6 rounded-full transition-all"
+                                    >
+                                        🛑 Disconnect ({account?.address?.slice(0, 6)}...)
+                                    </button>
+                                )}
                             </div>
                         ) : (
                             <button onClick={connectWallet} className="glow-button" style={{ width: '100%' }}>
