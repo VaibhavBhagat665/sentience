@@ -1,10 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Account } from '@aptos-labs/ts-sdk';
 import { x402Client, wrapFetchWithPayment } from '@rvk_rishikesh/fetch';
-import { registerExactAptosScheme } from '@rvk_rishikesh/aptos/exact/client';
-import { BrowserSigner } from './BrowserSigner';
+import { BrowserAptosScheme } from './BrowserAptosScheme';
 import { useWallet } from '@aptos-labs/wallet-adapter-react';
 
 const MODULE_ADDRESS = '0x0d0b4c628d57f3ffafa1259f1403595c1c07d0e7a0995018fd59e72d1aebfc8c';
@@ -41,14 +39,19 @@ export default function Home() {
             // Handle publicKey being string or array
             const pubKey = Array.isArray(account.publicKey) ? account.publicKey[0] : account.publicKey;
 
-            // Initialize x402 with BrowserSigner
-            const browserSigner = new BrowserSigner(account.address.toString(), pubKey, signTransaction);
-
-            // We cast to Account because x402 SDK expects Account type but only uses signTransaction
-            const mockAccount = browserSigner as unknown as Account;
-
             const x402client = new x402Client();
-            registerExactAptosScheme(x402client, { signer: mockAccount });
+
+            // Use our custom Browser Async Scheme
+            const browserScheme = new BrowserAptosScheme(
+                account.address.toString(),
+                pubKey.toString(),
+                signTransaction
+            );
+
+            // Register for Aptos Testnet (CAIP-2 identifier)
+            // Casting network to any to avoid importing x402 core types
+            x402client.register("aptos:testnet" as any, browserScheme);
+
             const wrappedFetch = wrapFetchWithPayment(fetch, x402client);
 
             setFetchWithPayment(() => wrappedFetch);
