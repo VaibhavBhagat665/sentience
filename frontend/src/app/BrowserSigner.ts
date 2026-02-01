@@ -14,12 +14,12 @@ import {
 export class BrowserSigner {
     readonly accountAddress: AccountAddress;
     readonly publicKey: Ed25519PublicKey;
-    readonly signFn: (transaction: AnyRawTransaction) => Promise<any>;
+    readonly signFn: (args: any) => Promise<any>;
 
     constructor(
         address: string,
         publicKeyHex: string,
-        signFn: (transaction: AnyRawTransaction) => Promise<any>
+        signFn: (args: any) => Promise<any>
     ) {
         this.accountAddress = AccountAddress.fromString(address);
         this.publicKey = new Ed25519PublicKey(publicKeyHex);
@@ -31,8 +31,8 @@ export class BrowserSigner {
      */
     async signTransaction(transaction: AnyRawTransaction): Promise<AccountAuthenticator> {
         try {
-            // Use the injected signing function
-            const response = await this.signFn(transaction);
+            // Use the injected signing function (wrapped for Adapter V2)
+            const response = await this.signFn({ transactionOrPayload: transaction });
 
             // Handle response formats
             let signatureHex = '';
